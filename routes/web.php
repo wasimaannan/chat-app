@@ -2,8 +2,8 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
-use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\PostController;
+use App\Http\Controllers\MessageController;
 
 /*
 |--------------------------------------------------------------------------
@@ -30,8 +30,8 @@ Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
 // Protected routes (require authentication)
 Route::middleware(['secure.auth'])->group(function () {
-    // Dashboard
-    Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    // Redirect old dashboard path to posts
+    Route::get('/dashboard', function(){ return redirect()->route('posts.index'); });
     
     // Profile management
     Route::get('/profile', [AuthController::class, 'profile'])->name('profile');
@@ -46,4 +46,17 @@ Route::middleware(['secure.auth'])->group(function () {
     Route::put('/posts/{id}', [PostController::class, 'update'])->name('posts.update');
     Route::delete('/posts/{id}', [PostController::class, 'destroy'])->name('posts.destroy');
     Route::get('/my-posts', [PostController::class, 'myPosts'])->name('posts.my-posts');
+
+    // Messaging
+    Route::get('/messages', [MessageController::class, 'index'])->name('messages.inbox');
+    Route::get('/messages/sent', [MessageController::class, 'sent'])->name('messages.sent');
+    Route::get('/messages/with/{userId}', [MessageController::class, 'conversation'])->name('messages.conversation');
+    Route::post('/messages', [MessageController::class, 'store'])->name('messages.store');
+    Route::post('/messages/{message}/read', [MessageController::class, 'read'])->name('messages.read');
+
+    // New chatty_cat modern UI
+    Route::get('/chat', [MessageController::class, 'chat'])->name('chat.index');
+    Route::get('/chat/users', [MessageController::class, 'users'])->name('chat.users');
+    Route::get('/chat/conversation/{userId}', [MessageController::class, 'conversationJson'])->name('chat.conversation.json');
+    Route::post('/chat/message', [MessageController::class, 'storeJson'])->name('chat.message.store');
 });

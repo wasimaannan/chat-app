@@ -120,6 +120,19 @@ class MACService
         $dataString = json_encode($postData) . $postId;
         return $this->verifyMAC($dataString, $mac, 'post_data');
     }
+
+    // Message MAC helpers
+    public function generateMessageDataMAC(array $messageData, int $messageId): string
+    {
+        $dataString = json_encode($messageData) . $messageId;
+        return $this->generateMAC($dataString, 'message_data');
+    }
+
+    public function verifyMessageDataMAC(array $messageData, int $messageId, string $mac): bool
+    {
+        $dataString = json_encode($messageData) . $messageId;
+        return $this->verifyMAC($dataString, $mac, 'message_data');
+    }
     
     /**
      * Generate timestamped MAC

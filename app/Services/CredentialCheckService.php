@@ -88,20 +88,19 @@ class CredentialCheckService
      */
     private function findUserByEmail(string $email): ?User
     {
-        $users = User::all();
-        
-        foreach ($users as $user) {
+        $hash = hash('sha256', strtolower(trim($email)));
+        $user = User::where('email_hash', $hash)->first();
+        if ($user) {
+            // (Optional) final confirmation by decrypting (defense-in-depth)
             try {
                 $decryptedEmail = $this->encryptionService->decrypt($user->email, 'user_info_email');
                 if (hash_equals(strtolower($decryptedEmail), strtolower($email))) {
                     return $user;
                 }
-            } catch (\Exception $e) {
-                Log::warning('Failed to decrypt email for user', ['user_id' => $user->id]);
-                continue;
+            } catch (\Throwable $e) {
+                Log::warning('Email hash matched but decrypt failed', ['user_id' => $user->id]);
             }
         }
-        
         return null;
     }
     

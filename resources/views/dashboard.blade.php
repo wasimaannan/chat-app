@@ -1,98 +1,42 @@
 @extends('layout')
 
-@section('title', 'Dashboard - Secure App')
+@section('title', 'Dashboard - chatty_cat')
 
 @section('content')
 <div class="row">
     <div class="col-12">
         <div class="d-flex justify-content-between align-items-center mb-4">
-            <h2>
-                <i class="fas fa-tachometer-alt"></i> 
-                Welcome, {{ $userData['name'] ?? 'User' }}!
-                <span class="security-badge">Data Encrypted</span>
-            </h2>
-            <div class="integrity-check">
-                <i class="fas fa-check-circle"></i> Data Integrity Verified
-            </div>
+            <h2 class="mb-0"><i class="fas fa-cat"></i> Hi, {{ $userData['name'] ?? 'User' }}</h2>
+            <div class="text-muted small">Have a calm conversation today.</div>
         </div>
     </div>
 </div>
 
-<div class="row mb-4">
-    <div class="col-md-3">
-        <div class="card bg-primary text-white">
-            <div class="card-body">
-                <div class="d-flex justify-content-between">
-                    <div>
-                        <h6 class="card-title">Total Posts</h6>
-                        <h3>{{ $stats['total_posts'] }}</h3>
-                    </div>
-                    <div class="align-self-center">
-                        <i class="fas fa-file-alt fa-2x"></i>
-                    </div>
-                </div>
-            </div>
+<div class="mb-4 p-3 rounded" style="background:#1a1f2e;border:1px solid #2c3448;">
+    <div class="row g-3 text-center small">
+        <div class="col-6 col-md-3">
+            <div class="fw-semibold text-muted">Posts</div>
+            <div class="h4 mb-0">{{ $stats['total_posts'] }}</div>
         </div>
-    </div>
-    
-    <div class="col-md-3">
-        <div class="card bg-success text-white">
-            <div class="card-body">
-                <div class="d-flex justify-content-between">
-                    <div>
-                        <h6 class="card-title">Published</h6>
-                        <h3>{{ $stats['published_posts'] }}</h3>
-                    </div>
-                    <div class="align-self-center">
-                        <i class="fas fa-check-circle fa-2x"></i>
-                    </div>
-                </div>
-            </div>
+        <div class="col-6 col-md-3">
+            <div class="fw-semibold text-muted">Published</div>
+            <div class="h4 mb-0">{{ $stats['published_posts'] }}</div>
         </div>
-    </div>
-    
-    <div class="col-md-3">
-        <div class="card bg-info text-white">
-            <div class="card-body">
-                <div class="d-flex justify-content-between">
-                    <div>
-                        <h6 class="card-title">This Week</h6>
-                        <h3>{{ $stats['recent_posts_count'] }}</h3>
-                    </div>
-                    <div class="align-self-center">
-                        <i class="fas fa-calendar-week fa-2x"></i>
-                    </div>
-                </div>
-            </div>
+        <div class="col-6 col-md-3 mt-3 mt-md-0">
+            <div class="fw-semibold text-muted">This Week</div>
+            <div class="h4 mb-0">{{ $stats['recent_posts_count'] }}</div>
         </div>
-    </div>
-    
-    <div class="col-md-3">
-        <div class="card bg-warning text-white">
-            <div class="card-body">
-                <div class="d-flex justify-content-between">
-                    <div>
-                        <h6 class="card-title">Total Users</h6>
-                        <h3>{{ $stats['total_users'] }}</h3>
-                    </div>
-                    <div class="align-self-center">
-                        <i class="fas fa-users fa-2x"></i>
-                    </div>
-                </div>
-            </div>
+        <div class="col-6 col-md-3 mt-3 mt-md-0">
+            <div class="fw-semibold text-muted">Users</div>
+            <div class="h4 mb-0">{{ $stats['total_users'] }}</div>
         </div>
     </div>
 </div>
 
 <div class="row">
-    <div class="col-md-8">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">
-                    <i class="fas fa-clock"></i> Recent Posts
-                    <span class="security-badge">Encrypted</span>
-                </h5>
-            </div>
+    <div class="col-md-7 col-lg-8">
+        <div class="card mb-4" style="background:#1c1f2b;border:1px solid #2c3448;">
+            <div class="card-header py-2"><h6 class="mb-0 text-uppercase small">Recent Posts</h6></div>
             <div class="card-body">
                 @if(count($decryptedRecentPosts) > 0)
                     <div class="list-group list-group-flush">
@@ -112,9 +56,7 @@
                                     <small>{{ $post['created_at']->diffForHumans() }}</small>
                                 </div>
                                 <p class="mb-1 text-muted">{{ $post['content'] }}</p>
-                                <small class="integrity-check">
-                                    <i class="fas fa-shield-alt"></i> Data integrity verified
-                                </small>
+                                <small class="text-muted">Updated {{ $post['created_at']->diffForHumans() }}</small>
                             </div>
                         @endforeach
                     </div>
@@ -138,38 +80,24 @@
         </div>
     </div>
     
-    <div class="col-md-4">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">
-                    <i class="fas fa-user"></i> Profile Overview
-                    <span class="security-badge">Encrypted</span>
-                </h5>
-            </div>
+    <div class="col-md-5 col-lg-4">
+        <div class="card mb-4" style="background:#1c1f2b;border:1px solid #2c3448;">
+            <div class="card-header py-2"><h6 class="mb-0 text-uppercase small">Profile</h6></div>
             <div class="card-body">
                 <div class="mb-3">
                     <strong><i class="fas fa-user"></i> Name:</strong><br>
                     <span class="text-muted">{{ $userData['name'] ?? 'Not set' }}</span>
-                    <small class="integrity-check d-block">
-                        <i class="fas fa-lock"></i> Encrypted & Verified
-                    </small>
                 </div>
                 
                 <div class="mb-3">
                     <strong><i class="fas fa-envelope"></i> Email:</strong><br>
                     <span class="text-muted">{{ $userData['email'] ?? 'Not set' }}</span>
-                    <small class="integrity-check d-block">
-                        <i class="fas fa-lock"></i> Encrypted & Verified
-                    </small>
                 </div>
                 
                 @if(!empty($userData['phone']))
                 <div class="mb-3">
                     <strong><i class="fas fa-phone"></i> Phone:</strong><br>
                     <span class="text-muted">{{ $userData['phone'] }}</span>
-                    <small class="integrity-check d-block">
-                        <i class="fas fa-lock"></i> Encrypted & Verified
-                    </small>
                 </div>
                 @endif
                 
@@ -181,40 +109,10 @@
             </div>
         </div>
         
-        <div class="card mt-3">
-            <div class="card-header">
-                <h5 class="mb-0">
-                    <i class="fas fa-shield-alt"></i> Security Status
-                </h5>
-            </div>
-            <div class="card-body">
-                <div class="security-status">
-                    <div class="mb-2">
-                        <i class="fas fa-check text-success"></i>
-                        <span class="small">Data encryption active</span>
-                    </div>
-                    <div class="mb-2">
-                        <i class="fas fa-check text-success"></i>
-                        <span class="small">Password securely hashed</span>
-                    </div>
-                    <div class="mb-2">
-                        <i class="fas fa-check text-success"></i>
-                        <span class="small">Integrity verification enabled</span>
-                    </div>
-                    <div class="mb-2">
-                        <i class="fas fa-check text-success"></i>
-                        <span class="small">Secure session management</span>
-                    </div>
-                </div>
-            </div>
-        </div>
+    <!-- Security status panel removed for minimalist design -->
         
-        <div class="card mt-3">
-            <div class="card-header">
-                <h5 class="mb-0">
-                    <i class="fas fa-plus"></i> Quick Actions
-                </h5>
-            </div>
+                <div class="card" style="background:#1c1f2b;border:1px solid #2c3448;">
+                        <div class="card-header py-2"><h6 class="mb-0 text-uppercase small">Quick Actions</h6></div>
             <div class="card-body">
                 <div class="d-grid gap-2">
                     <a href="{{ route('posts.create') }}" class="btn btn-primary btn-sm">
@@ -223,9 +121,33 @@
                     <a href="{{ route('posts.index') }}" class="btn btn-outline-secondary btn-sm">
                         <i class="fas fa-list"></i> Browse All Posts
                     </a>
+                                        <a href="{{ route('chat.index') }}" class="btn btn-outline-secondary btn-sm">
+                                                <i class="fas fa-comments"></i> Open Chat
+                                        </a>
                 </div>
             </div>
         </div>
+                <div class="card" style="background:#1c1f2b;border:1px solid #2c3448;">
+                        <div class="card-header py-2"><h6 class="mb-0 text-uppercase small">Recent Conversations</h6></div>
+                        <div class="card-body small" id="recentConvos">Loading...</div>
+                </div>
     </div>
 </div>
+@section('scripts')
+<script>
+// Fetch last few conversations for sidebar
+fetch('/chat/users',{headers:{'Accept':'application/json'}}).then(r=>r.json()).then(d=>{
+    const box=document.getElementById('recentConvos');
+    if(!d.users||d.users.length===0){ box.textContent='No conversations yet.'; return; }
+    box.innerHTML='';
+    d.users.slice(0,5).forEach(u=>{
+        const div=document.createElement('div');
+        div.className='d-flex justify-content-between align-items-center py-1';
+        div.innerHTML=`<span class="text-truncate" style="max-width:140px;">${u.name||('User #'+u.id)}</span>`+
+            `<a href="/chat#${u.id}" class="text-decoration-none small">${u.unread>0?('<span class=\'badge bg-danger\'>'+u.unread+'</span>'):'View'}</a>`;
+        box.appendChild(div);
+    });
+}).catch(()=>{const b=document.getElementById('recentConvos'); if(b) b.textContent='Failed to load.'});
+</script>
+@endsection
 @endsection

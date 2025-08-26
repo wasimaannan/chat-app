@@ -4,6 +4,9 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Str;
 use App\Models\User;
 use App\Services\PasswordService;
 use App\Services\EncryptionService;
@@ -50,13 +53,16 @@ class AuthController extends Controller
      */
     public function register(Request $request)
     {
+        // Ensure SQLite database file exists (common cause of silent registration failure)
+        $this->ensureSqliteDatabase();
+
         // Validate input
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
             'email' => 'required|email|max:255',
             'phone' => 'nullable|string|max:20',
             'address' => 'nullable|string|max:500',
-            'date_of_birth' => 'nullable|date',
+            'date_of_birth' => ['nullable','regex:/^\d{4}-\d{2}-\d{2}$/'],
             'password' => 'required|string|min:8|confirmed',
         ]);
         
@@ -83,25 +89,47 @@ class AuthController extends Controller
             // Hash password with salt
             $passwordData = $this->passwordService->hashPassword($request->password);
             
-            // Create user with encrypted data
-            $userData = [
-                'name' => $request->name,
-                'email' => $request->email,
-                'phone' => $request->phone,
-                'address' => $request->address,
-                'date_of_birth' => $request->date_of_birth,
-            ];
-            
-            // Encrypt user data
-            $encryptedData = $this->encryptionService->encryptUserInfo($userData);
-            
-            // Create user
-            $user = new User();
-            $user->fill($encryptedData);
-            $user->password_hash = $passwordData['hash'];
-            $user->password_salt = $passwordData['salt'];
-            $user->is_active = true;
-            $user->save();
+            // Normalize date_of_birth (HTML input might be d/m/Y in some browsers if locale set)
+            $dobInput = $request->date_of_birth;
+            if (!empty($dobInput) && preg_match('#^\d{2}/\d{2}/\d{4}$#', $dobInput)) {
+                // Convert dd/mm/YYYY -> YYYY-mm-dd
+                [$d,$m,$y] = explode('/', $dobInput);
+                $dobInput = "$y-$m-$d";
+            }
+
+            DB::beginTransaction();
+            try {
+                // Create user with encrypted data
+                $userData = [
+                    'name' => $request->name,
+                    'email' => $request->email,
+                    'phone' => $request->phone,
+                    'address' => $request->address,
+                    'date_of_birth' => $dobInput,
+                ];
+                
+                // Encrypt user data
+                $encryptedData = $this->encryptionService->encryptUserInfo($userData);
+                
+                // Create user (ensure email_hash populated via deterministic hash)
+                $user = new User();
+                $user->fill($encryptedData);
+                if (!empty($request->email)) {
+                    $user->email_hash = hash('sha256', strtolower(trim($request->email)));
+                }
+                $user->password_hash = $passwordData['hash'];
+                $user->password_salt = $passwordData['salt'];
+                $user->is_active = true;
+                $user->save();
+
+                DB::commit();
+            } catch (\Throwable $inner) {
+                DB::rollBack();
+                \Log::error('Registration inner failure: '.$inner->getMessage(), [
+                    'trace_top' => collect(explode("\n", $inner->getTraceAsString()))->take(5)->implode('|'),
+                ]);
+                throw $inner; // rethrow to outer catch
+            }
             
             // Generate session token
             $sessionToken = $this->credentialService->generateSessionToken($user);
@@ -109,10 +137,10 @@ class AuthController extends Controller
             // Set session
             session(['auth_token' => $sessionToken, 'user_id' => $user->id]);
             
-            return redirect()->route('dashboard')->with('success', 'Registration successful!');
+            return redirect()->route('posts.index')->with('success', 'Registration successful!');
             
         } catch (\Exception $e) {
-            \Log::error('Registration failed: ' . $e->getMessage());
+            \Log::error('Registration failed: ' . $e->getMessage(), ['class' => get_class($e)]);
             return back()->withErrors(['error' => 'Registration failed. Please try again.'])->withInput();
         }
     }
@@ -149,7 +177,7 @@ class AuthController extends Controller
             // Set session
             session(['auth_token' => $sessionToken, 'user_id' => $result['user']->id]);
             
-            return redirect()->route('dashboard')->with('success', 'Login successful!');
+            return redirect()->route('posts.index')->with('success', 'Login successful!');
             
         } catch (\Exception $e) {
             \Log::error('Login failed: ' . $e->getMessage());
@@ -173,20 +201,8 @@ class AuthController extends Controller
      */
     private function isEmailExists(string $email): bool
     {
-        $users = User::all();
-        
-        foreach ($users as $user) {
-            try {
-                $decryptedEmail = $this->encryptionService->decrypt($user->email, 'user_info_email');
-                if (strtolower($decryptedEmail) === strtolower($email)) {
-                    return true;
-                }
-            } catch (\Exception $e) {
-                continue;
-            }
-        }
-        
-        return false;
+    $hash = hash('sha256', strtolower(trim($email)));
+    return User::where('email_hash', $hash)->exists();
     }
     
     /**
@@ -258,5 +274,42 @@ class AuthController extends Controller
         }
         
         return $this->credentialService->validateSessionToken($token);
+    }
+
+    /**
+     * Ensure sqlite database file exists when using sqlite.
+     * Resolves relative path against base_path and auto-creates missing file.
+     */
+    private function ensureSqliteDatabase(): void
+    {
+        try {
+            if (config('database.default') !== 'sqlite') {
+                return; // not sqlite
+            }
+
+            $configured = config('database.connections.sqlite.database');
+            if (!$configured) {
+                return;
+            }
+
+            $dbPath = $configured;
+            if (!Str::contains($dbPath, ':') && !Str::startsWith($dbPath, ['/'])) {
+                $dbPath = base_path($dbPath);
+            }
+
+            $dbPath = str_replace(['\\', '/'], DIRECTORY_SEPARATOR, $dbPath);
+
+            if (!File::exists($dbPath)) {
+                $dir = dirname($dbPath);
+                if (!File::isDirectory($dir)) {
+                    File::makeDirectory($dir, 0755, true);
+                }
+                File::put($dbPath, '');
+                \Log::info('SQLite database file created automatically', ['path' => $dbPath]);
+                try { DB::connection()->getPdo(); } catch (\Throwable $e) { /* ignore */ }
+            }
+        } catch (\Throwable $e) {
+            \Log::warning('Failed to ensure sqlite database file', ['error' => $e->getMessage()]);
+        }
     }
 }

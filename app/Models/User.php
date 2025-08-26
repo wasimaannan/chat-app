@@ -19,6 +19,7 @@ class User extends Authenticatable
     protected $fillable = [
         'name',
         'email',
+    'email_hash',
         'phone',
         'address',
         'date_of_birth',
@@ -44,7 +45,6 @@ class User extends Authenticatable
      */
     protected $casts = [
         'email_verified_at' => 'datetime',
-        'date_of_birth' => 'date',
         'is_active' => 'boolean',
     ];
 
@@ -85,6 +85,11 @@ class User extends Authenticatable
         
         // Set encrypted attributes
         $this->fill($encryptedData);
+
+        // Maintain deterministic email hash for fast lookups (lowercase SHA-256 of decrypted email)
+        if (!empty($userData['email'])) {
+            $this->email_hash = hash('sha256', strtolower(trim($userData['email'])));
+        }
         
         // Generate MAC for data integrity
         $this->data_mac = $macService->generateUserDataMAC($encryptedData, $this->id ?? 0);

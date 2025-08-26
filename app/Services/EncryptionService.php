@@ -124,4 +124,20 @@ class EncryptionService
             'encrypted_at' => $encryptedPost['encrypted_at'] ?? null
         ];
     }
+
+    /**
+     * Encrypt chat/message body
+     */
+    public function encryptMessage(string $body): string
+    {
+        return $this->encrypt($body, 'message_body');
+    }
+
+    /**
+     * Decrypt chat/message body
+     */
+    public function decryptMessage(string $encryptedBody): string
+    {
+        return $this->decrypt($encryptedBody, 'message_body');
+    }
 }

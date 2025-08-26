@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use Closure;
 use Illuminate\Http\Request;
 use App\Services\CredentialCheckService;
+use Illuminate\Support\Facades\Auth; // ensure Auth::user() works in controllers
 
 class SecureAuth
 {
@@ -49,6 +50,12 @@ class SecureAuth
         
         // Add user to request for easy access
         $request->attributes->set('authenticated_user', $user);
+
+        // ALSO inject into Laravel's Auth facade so legacy Auth::user()/Auth::id() calls work.
+        // We aren't using guards/password column, but setting the user instance is enough for retrieval.
+        if (!Auth::check()) {
+            Auth::setUser($user);
+        }
         
         return $next($request);
     }

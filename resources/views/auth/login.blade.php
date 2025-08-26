@@ -1,23 +1,13 @@
 @extends('layout')
 
-@section('title', 'Login - Secure App')
+@section('title', 'Login - chatty_cat')
 
 @section('content')
 <div class="row justify-content-center">
     <div class="col-md-6">
-        <div class="card">
-            <div class="card-header bg-primary text-white">
-                <h4 class="mb-0">
-                    <i class="fas fa-sign-in-alt"></i> 
-                    Secure Login
-                    <span class="security-badge">Encrypted</span>
-                </h4>
-            </div>
-            <div class="card-body">
-                <div class="alert alert-info">
-                    <i class="fas fa-info-circle"></i>
-                    <strong>Security Notice:</strong> All credentials are encrypted and verified using advanced security protocols.
-                </div>
+        <div class="card" style="background:#1c1c1c;">
+            <div class="card-body p-4">
+                <h4 class="mb-4"><i class="fas fa-cat"></i> Welcome back</h4>
                 
                 <form action="{{ route('login') }}" method="POST">
                     @csrf
@@ -65,17 +55,8 @@
                 <hr>
                 
                 <div class="text-center">
-                    <p class="mb-0">Don't have an account?</p>
-                    <a href="{{ route('register') }}" class="btn btn-outline-secondary">
-                        <i class="fas fa-user-plus"></i> Create Secure Account
-                    </a>
-                </div>
-                
-                <div class="mt-3">
-                    <small class="text-muted">
-                        <i class="fas fa-shield-alt text-success"></i>
-                        <strong>Security Features:</strong> Password verification with salt, encrypted data transmission, and MAC integrity checks.
-                    </small>
+                    <p class="mb-2">No account?</p>
+                    <a href="{{ route('register') }}" class="btn btn-outline-light btn-sm"><i class="fas fa-user-plus"></i> Register</a>
                 </div>
             </div>
         </div>

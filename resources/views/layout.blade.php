@@ -3,50 +3,48 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>@yield('title', 'Secure Laravel App')</title>
+    <title>@yield('title', 'chatty_cat')</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+    <link href="/css/chatty.css" rel="stylesheet">
     <style>
-        .security-badge {
-            background: linear-gradient(45deg, #28a745, #20c997);
-            color: white;
-            padding: 0.25rem 0.5rem;
-            border-radius: 0.25rem;
-            font-size: 0.75rem;
-            margin-left: 0.5rem;
+        :root {
+            --cc-bg: linear-gradient(135deg,#1b1f3a,#252d5a 40%,#3d1f54);
+            --cc-surface: #1f243d;
+            --cc-surface-alt:#242b48;
+            --cc-accent:#ff9f43;
+            --cc-accent-alt:#ff5e8e;
+            --cc-accent-grad: linear-gradient(135deg,var(--cc-accent),var(--cc-accent-alt));
+            --cc-glow: 0 0 0 0 rgba(255,159,67,.4);
+            --cc-text:#eceff8;
         }
-        
-        .encrypted-field {
-            position: relative;
-        }
-        
-        .encrypted-field::after {
-            content: '🔒';
-            position: absolute;
-            right: 10px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: #28a745;
-        }
-        
-        .integrity-check {
-            color: #28a745;
-            font-size: 0.8rem;
-        }
-        
-        .navbar-brand .security-icon {
-            color: #ffc107;
-            margin-right: 0.5rem;
-        }
+        body { background:var(--cc-bg); background-attachment:fixed; color:var(--cc-text); font-family:'Nunito', sans-serif; min-height:100vh; }
+    .navbar { background:rgba(20,24,45,.75)!important; backdrop-filter: blur(12px); border-bottom:1px solid rgba(255,255,255,.05); position:relative; z-index:6000; }
+        .navbar-brand { font-weight:700; letter-spacing:.5px; display:flex; align-items:center; }
+        .navbar-brand .brand-icon { color:var(--cc-accent); margin-right:.55rem; filter:drop-shadow(0 0 6px rgba(255,159,67,.5)); animation:catPulse 3s ease-in-out infinite; }
+        .chat-badge { background:var(--cc-accent-grad); color:#111; border-radius:14px; padding:3px 10px; font-size:.65rem; margin-left:.45rem; font-weight:700; box-shadow:0 2px 6px -2px rgba(255,94,142,.4); }
+        a { color:var(--cc-accent); transition:.25s; }
+        a:hover { color:var(--cc-accent-alt); }
+        main.container { animation:fadeSlide .6s ease; }
+        footer { background:rgba(20,24,45,.85); backdrop-filter:blur(10px); border-top:1px solid rgba(255,255,255,.05); }
+        @keyframes fadeSlide { from{opacity:0; transform:translateY(12px);} to{opacity:1; transform:translateY(0);} }
+        @keyframes catPulse { 0%,100%{transform:scale(1);} 50%{transform:scale(1.15);} }
+    /* Ensure account dropdown overlays dashboard/cards */
+    .navbar .dropdown-menu { z-index: 6500; }
+    /* Lower main content stacking */
+    .gradient-border, main.container, .gradient-border:before { position:relative; z-index:1; }
+    /* Avoid cards creating unexpected stacking above nav */
+    .card { position:relative; z-index:2; }
     </style>
+    <meta name="csrf-token" content="{{ csrf_token() }}">
 </head>
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
         <div class="container">
-            <a class="navbar-brand" href="{{ route('dashboard') }}">
-                <i class="fas fa-shield-alt security-icon"></i>
-                Secure App
-                <span class="security-badge">Encrypted</span>
+            <a class="navbar-brand" href="{{ route('posts.index') }}">
+                <i class="fas fa-cat brand-icon"></i>
+                chatty_cat <span class="chat-badge">beta</span>
             </a>
             
             @if(session('user_id'))
@@ -56,8 +54,8 @@
                         <i class="fas fa-user"></i> Account
                     </a>
                     <ul class="dropdown-menu">
-                        <li><a class="dropdown-item" href="{{ route('dashboard') }}">
-                            <i class="fas fa-tachometer-alt"></i> Dashboard
+                        <li><a class="dropdown-item" href="{{ route('posts.index') }}">
+                            <i class="fas fa-rss"></i> Feed
                         </a></li>
                         <li><a class="dropdown-item" href="{{ route('posts.index') }}">
                             <i class="fas fa-list"></i> All Posts
@@ -67,6 +65,9 @@
                         </a></li>
                         <li><a class="dropdown-item" href="{{ route('posts.create') }}">
                             <i class="fas fa-plus"></i> Create Post
+                        </a></li>
+                        <li><a class="dropdown-item" href="{{ route('chat.index') }}">
+                            <i class="fas fa-comments"></i> Chat
                         </a></li>
                         <li><a class="dropdown-item" href="{{ route('profile') }}">
                             <i class="fas fa-user-cog"></i> Profile
@@ -120,34 +121,14 @@
         @yield('content')
     </main>
 
-    <footer class="bg-dark text-light py-4 mt-5">
-        <div class="container">
-            <div class="row">
-                <div class="col-md-6">
-                    <h6><i class="fas fa-shield-alt"></i> Security Features</h6>
-                    <ul class="list-unstyled small">
-                        <li><i class="fas fa-check text-success"></i> End-to-end encryption</li>
-                        <li><i class="fas fa-check text-success"></i> Salted password hashing</li>
-                        <li><i class="fas fa-check text-success"></i> Data integrity with MAC</li>
-                        <li><i class="fas fa-check text-success"></i> Secure key management</li>
-                    </ul>
-                </div>
-                <div class="col-md-6">
-                    <h6><i class="fas fa-info-circle"></i> About</h6>
-                    <p class="small">
-                        This application demonstrates advanced security features including
-                        encryption, authentication, and data integrity verification.
-                    </p>
-                </div>
-            </div>
-            <hr>
-            <div class="text-center">
-                <small>&copy; 2024 Secure Laravel Application. All data is encrypted and protected.</small>
-            </div>
+    <footer class="text-light py-4 mt-5 small">
+        <div class="container text-center small">
+            <span>&copy; 2024 chatty_cat • crafted with <i class="fas fa-heart text-danger"></i> • colorful encrypted chatting</span>
         </div>
     </footer>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>// layout base JS placeholder</script>
     @yield('scripts')
 </body>
 </html>

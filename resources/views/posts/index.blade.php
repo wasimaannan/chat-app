@@ -3,6 +3,13 @@
 @section('title', 'All Posts - Secure App')
 
 @section('content')
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="mb-0">Feed</h2>
+    <div class="d-flex gap-2">
+        <a href="{{ route('chat.index') }}" class="btn btn-sm btn-primary"><i class="fas fa-comments"></i> Chat</a>
+        <a href="{{ route('posts.create') }}" class="btn btn-sm btn-outline-light"><i class="fas fa-plus"></i> New Post</a>
+    </div>
+</div>
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2>
         <i class="fas fa-list"></i> 

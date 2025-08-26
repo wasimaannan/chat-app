@@ -1,24 +1,13 @@
 @extends('layout')
 
-@section('title', 'Register - Secure App')
+@section('title', 'Register - chatty_cat')
 
 @section('content')
 <div class="row justify-content-center">
     <div class="col-md-8">
-        <div class="card">
-            <div class="card-header bg-success text-white">
-                <h4 class="mb-0">
-                    <i class="fas fa-user-plus"></i> 
-                    Create Secure Account
-                    <span class="security-badge">Encrypted</span>
-                </h4>
-            </div>
-            <div class="card-body">
-                <div class="alert alert-info">
-                    <i class="fas fa-shield-alt"></i>
-                    <strong>Privacy Protection:</strong> All personal information will be encrypted before storage. 
-                    Passwords are hashed with unique salts for maximum security.
-                </div>
+        <div class="card" style="background:#1c1c1c;">
+            <div class="card-body p-4">
+                <h4 class="mb-4"><i class="fas fa-user-plus"></i> Create account</h4>
                 
                 <form action="{{ route('register') }}" method="POST" id="registerForm">
                     @csrf
@@ -173,17 +162,7 @@
                         </div>
                     </div>
                     
-                    <div class="mb-3">
-                        <div class="alert alert-warning">
-                            <h6><i class="fas fa-exclamation-triangle"></i> Password Requirements:</h6>
-                            <ul class="mb-0 small">
-                                <li>At least 8 characters long</li>
-                                <li>Include uppercase and lowercase letters</li>
-                                <li>Include at least one number</li>
-                                <li>Include at least one special character</li>
-                            </ul>
-                        </div>
-                    </div>
+                    <div class="small text-muted">Password must be 8+ chars with mixed case, number & symbol.</div>
                     
                     <div class="d-grid gap-2">
                         <button type="submit" class="btn btn-success">
@@ -194,33 +173,8 @@
                 
                 <hr>
                 
-                <div class="text-center">
-                    <p class="mb-0">Already have an account?</p>
-                    <a href="{{ route('login') }}" class="btn btn-outline-primary">
-                        <i class="fas fa-sign-in-alt"></i> Login
-                    </a>
-                </div>
-                
-                <div class="mt-3">
-                    <div class="card bg-light">
-                        <div class="card-body">
-                            <h6><i class="fas fa-shield-alt text-success"></i> Security Guarantees:</h6>
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <ul class="list-unstyled small">
-                                        <li><i class="fas fa-check text-success"></i> All personal data encrypted</li>
-                                        <li><i class="fas fa-check text-success"></i> Passwords salted and hashed</li>
-                                    </ul>
-                                </div>
-                                <div class="col-md-6">
-                                    <ul class="list-unstyled small">
-                                        <li><i class="fas fa-check text-success"></i> Data integrity verification</li>
-                                        <li><i class="fas fa-check text-success"></i> Secure key management</li>
-                                    </ul>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                <div class="text-center mt-3">
+                    <a href="{{ route('login') }}" class="btn btn-outline-light btn-sm"><i class="fas fa-sign-in-alt"></i> Have an account? Login</a>
                 </div>
             </div>
         </div>
