@@ -7,7 +7,12 @@ echo.
 echo [1/6] Checking PHP installation...
 php --version >nul 2>&1
 if %errorlevel% neq 0 (
-    echo ERROR: PHP is not installed or not in PATH
+    echo WARNING: PHP is not installed or not in PATH
+    echo.
+    echo Please install PHP from: https://www.php.net/downloads.php
+    echo Or use XAMPP/WAMP for easy installation: https://www.apachefriends.org/
+    echo.
+    echo After installing PHP, add it to your system PATH and run this script again.
     pause
     exit /b 1
 )
@@ -52,9 +57,22 @@ if %errorlevel% neq 0 (
 )
 
 echo.
-echo [6/6] Setting up database...
-echo Please ensure your database is running and configured in .env file
-echo Then run: php artisan migrate
+echo [6/6] Database configuration...
+echo The application is configured to use SQLite by default (no server required).
+echo SQLite database file created at: database\database.sqlite
+echo.
+echo If you prefer MySQL/PostgreSQL, edit .env file and update:
+echo - DB_CONNECTION=mysql (or pgsql)
+echo - DB_HOST=127.0.0.1
+echo - DB_PORT=3306 (or 5432 for PostgreSQL)
+echo - DB_DATABASE=your_database_name
+echo - DB_USERNAME=your_username
+echo - DB_PASSWORD=your_password
+echo.
+echo After configuring database, run these commands:
+echo 1. php artisan key:generate
+echo 2. php artisan migrate
+echo 3. php artisan serve
 
 echo.
 echo ========================================
