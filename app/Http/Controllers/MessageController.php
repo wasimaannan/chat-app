@@ -4,11 +4,26 @@ namespace App\Http\Controllers;
 
 use App\Models\Message;
 use App\Models\User;
+use App\Models\Conversation;
+use App\Services\ConversationService;
+use App\Services\EncryptionService;
+use App\Services\MACService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class MessageController extends Controller
 {
+    private ConversationService $conversationService;
+    private EncryptionService $encryptionService;
+    private MACService $macService;
+
+    public function __construct(ConversationService $conversationService, EncryptionService $encryptionService, MACService $macService)
+    {
+        $this->conversationService = $conversationService;
+        $this->encryptionService = $encryptionService;
+        $this->macService = $macService;
+    }
     /**
      * Resolve the currently authenticated user using multiple fallbacks.
      */
@@ -151,8 +166,10 @@ class MessageController extends Controller
             }
             $snippet = null;
             if ($lastMsg) {
-                try { $snippet = app(\App\Services\EncryptionService::class)->decrypt($lastMsg->body_encrypted, 'message_body'); } catch (\Exception $e) { $snippet='[enc]'; }
-                if (strlen($snippet) > 40) { $snippet = substr($snippet,0,40).'…'; }
+                // Encrypted payload stored in 'body' (not body_encrypted); broad catch to avoid TypeError fatal
+                try { $snippet = app(\App\Services\EncryptionService::class)->decrypt($lastMsg->body, 'message_body'); }
+                catch (\Throwable $e) { $snippet='[enc]'; }
+                if (is_string($snippet) && strlen($snippet) > 40) { $snippet = substr($snippet,0,40).'…'; }
             }
             $result[] = [
                 'id' => $u->id,
@@ -163,7 +180,13 @@ class MessageController extends Controller
                 'online' => true,
             ];
         }
-        return response()->json(['users'=>$result]);
+        \Log::debug('chat.users', [
+            'selfId'=>$selfId,
+            'q'=>$q,
+            'returned'=>count($result),
+            'total_users'=>User::count()
+        ]);
+        return response()->json(['users'=>$result,'meta'=>['self_id'=>$selfId,'total'=>User::count()]]);
     }
 
     // Conversation messages (incremental if after=id provided)
@@ -237,5 +260,137 @@ class MessageController extends Controller
         $msg->updateDataMAC();
         $msg->save();
         return response()->json(['status'=>'ok','id'=>$msg->id]);
+    }
+
+    // === New Conversation-based API ===
+    public function openDirect(Request $request)
+    {
+        $auth = $this->currentUser($request);
+        if(!$auth) return response()->json(['error'=>'unauth'],401);
+        $data = $request->validate(['user_id'=>'required|integer|exists:users,id']);
+        $other = (int)$data['user_id'];
+        if($other === $auth->id) return response()->json(['error'=>'self'],422);
+        $conv = $this->conversationService->findOrCreateDirect($auth->id, $other);
+        $messages = $conv->messages()->orderByDesc('id')->limit(60)->get()->sortBy('id')->values()->map(function($m) use ($auth){
+            $plain = null; try { $plain = $this->encryptionService->decrypt($m->body,'message_body'); } catch(\Throwable $e){ $plain='[enc]'; }
+            return [
+                'id'=>$m->id,
+                'body'=>$plain,
+                'is_me'=>$m->sender_id===$auth->id,
+                'time'=>$m->created_at->format('H:i')
+            ];
+        });
+        return response()->json(['conversation_id'=>$conv->id,'messages'=>$messages]);
+    }
+
+    public function send(Request $request)
+    {
+        $auth = $this->currentUser($request);
+        if(!$auth) return response()->json(['error'=>'unauth'],401);
+        $data = $request->validate([
+            'conversation_id'=>'nullable|integer|exists:conversations,id',
+            'user_id'=>'nullable|integer|exists:users,id',
+            'body'=>'required|string|max:4000'
+        ]);
+        if(empty($data['conversation_id']) && empty($data['user_id'])) {
+            return response()->json(['error'=>'target_missing'],422);
+        }
+        if(!empty($data['user_id']) && (int)$data['user_id']===$auth->id) {
+            return response()->json(['error'=>'self'],422);
+        }
+        $conv = null;
+        if(!empty($data['conversation_id'])) {
+            $conv = Conversation::forUser($auth->id)->where('id',$data['conversation_id'])->firstOrFail();
+        } else {
+            $conv = $this->conversationService->findOrCreateDirect($auth->id,(int)$data['user_id']);
+        }
+        $plain = trim($data['body']);
+        $cipher = $this->encryptionService->encrypt($plain, 'message_body');
+        $msg = new Message();
+        $msg->conversation_id = $conv->id;
+        $msg->sender_id = $auth->id;
+        // Maintain legacy receiver_id (first other participant) for direct conversations so existing queries & NOT NULL constraint work
+        $receiverId = null;
+        if ($conv->type === 'direct') {
+            $other = $conv->participants()->where('user_id','!=',$auth->id)->first();
+            if ($other) { $receiverId = $other->user_id; }
+        }
+        if (!$receiverId) { // Fallback: keep self to avoid null constraint, though should not happen
+            $receiverId = $auth->id; 
+        }
+        $msg->receiver_id = $receiverId;
+        $msg->body = $cipher;
+        $msg->save();
+        $msg->updateDataMAC();
+        $msg->save();
+        return response()->json(['message'=>[
+            'id'=>$msg->id,
+            'body'=>$plain,
+            'is_me'=>true,
+            'time'=>$msg->created_at->format('H:i')
+        ],'conversation_id'=>$conv->id]);
+    }
+
+    public function messages(Request $request, $id)
+    {
+        $auth = $this->currentUser($request);
+        if(!$auth) return response()->json(['error'=>'unauth'],401);
+        $after = (int)$request->query('after',0);
+        $conv = Conversation::forUser($auth->id)->where('id',$id)->firstOrFail();
+        $query = $conv->messages()->orderBy('id');
+        if($after>0) $query->where('id','>',$after);
+        $rows = $query->limit(120)->get()->map(function($m) use ($auth){
+            $plain=null; try { $plain=$this->encryptionService->decrypt($m->body,'message_body'); } catch(\Throwable $e){ $plain='[enc]'; }
+            return [
+                'id'=>$m->id,
+                'body'=>$plain,
+                'is_me'=>$m->sender_id===$auth->id,
+                'time'=>$m->created_at->format('H:i')
+            ];
+        });
+        return response()->json(['messages'=>$rows]);
+    }
+
+    // --- WebRTC signaling endpoints ---
+    public function signal(Request $request, $id)
+    {
+        $auth = $this->currentUser($request); if(!$auth) return response()->json(['error'=>'unauth'],401);
+        $conv = Conversation::forUser($auth->id)->where('id',$id)->firstOrFail();
+        $data = $request->validate([
+            'type'=>'required|string|max:32',
+            'payload'=>'nullable|array'
+        ]);
+        $allowed=['offer','answer','candidate','bye'];
+        if(!in_array($data['type'],$allowed)) return response()->json(['error'=>'type'],422);
+        DB::table('call_signals')->insert([
+            'conversation_id'=>$conv->id,
+            'from_user_id'=>$auth->id,
+            'type'=>$data['type'],
+            'payload'=>json_encode($data['payload'] ?? []),
+            'created_at'=>now(),
+            'updated_at'=>now(),
+        ]);
+        if(random_int(1,25)===13){
+            DB::table('call_signals')->where('created_at','<',now()->subMinutes(15))->delete();
+        }
+        return response()->json(['status'=>'ok']);
+    }
+
+    public function fetchSignals(Request $request, $id)
+    {
+        $auth = $this->currentUser($request); if(!$auth) return response()->json(['error'=>'unauth'],401);
+        $conv = Conversation::forUser($auth->id)->where('id',$id)->firstOrFail();
+        $after=(int)$request->query('after',0);
+        $rows = DB::table('call_signals')->where('conversation_id',$conv->id)
+            ->when($after>0, fn($q)=>$q->where('id','>',$after))
+            ->orderBy('id')->limit(60)->get()->map(function($r){
+                return [
+                    'id'=>$r->id,
+                    'from_user_id'=>$r->from_user_id,
+                    'type'=>$r->type,
+                    'payload'=>json_decode($r->payload ?: '{}', true)
+                ];
+            });
+        return response()->json(['signals'=>$rows]);
     }
 }

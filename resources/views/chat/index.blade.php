@@ -44,15 +44,22 @@
 
 @section('scripts')
 <script>
-// Basic polling chat client (upgradeable to WebSockets later)
+// Basic polling chat client + experimental WebRTC data channel signaling (poll-based)
 const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-let currentUserId = null; // conversation partner
+let currentPartnerUserId = null; // selected user id
+let currentConversationId = null; // active conversation id
 let pollHandle = null;
 let lastMessageId = 0;
+// WebRTC globals
+let rtcPeer = null; let rtcChannel = null; let rtcReady=false; let rtcInit=false; let signalAfter=0;
 
 async function fetchJSON(url, opts = {}) {
     const res = await fetch(url, Object.assign({ headers:{ 'X-Requested-With':'XMLHttpRequest','Accept':'application/json','X-CSRF-TOKEN':csrfToken }}, opts));
     if(!res.ok) throw new Error('HTTP '+res.status);
+    const ct = res.headers.get('content-type')||'';
+    if(!ct.includes('application/json')) {
+        throw new Error('Non-JSON response (possible session timeout)');
+    }
     return res.json();
 }
 
@@ -60,7 +67,7 @@ function renderConversationList(items) {
     const ul = document.getElementById('conversationList');
     ul.innerHTML = '';
     if(items.length === 0){
-        ul.innerHTML = '<li class="text-muted small px-3 py-2">No users found.</li>';
+        ul.innerHTML = '<li class="text-muted small px-3 py-2">No other users yet. Log out and register a second account in another browser to start chatting.</li>';
         document.getElementById('convCount').textContent = 0;
         return;
     }
@@ -69,13 +76,13 @@ function renderConversationList(items) {
         const li = document.createElement('li');
         li.className = 'px-3 py-2 conversation-item d-flex align-items-center gap-2';
         li.style.cursor='pointer';
-        if(currentUserId === it.id) li.classList.add('bg-secondary');
+    if(currentPartnerUserId === it.id) li.classList.add('bg-secondary');
         li.innerHTML = `<div class="flex-grow-1"><div class="fw-semibold">${it.name??('User #'+it.id)}</div><div class="small text-muted text-truncate" style="max-width:170px;">${(it.last_message||'')}</div></div>` + (it.unread>0?`<span class="badge bg-danger">${it.unread}</span>`:'');
         li.addEventListener('click', ()=>selectConversation(it.id, it));
         ul.appendChild(li);
     });
     // Auto-select first if none active
-    if(!currentUserId && items.length>0){
+    if(!currentPartnerUserId && items.length>0){
         selectConversation(items[0].id, items[0]);
     }
 }
@@ -85,7 +92,12 @@ async function loadConversationList() {
         const q = document.getElementById('userSearch').value.trim();
         const data = await fetchJSON('/chat/users'+(q?('?q='+encodeURIComponent(q)):'') );
         renderConversationList(data.users);
-    } catch(e){ console.error(e); }
+    } catch(e){
+        console.error('Failed loading users', e);
+        const ul = document.getElementById('conversationList');
+        ul.innerHTML = '<li class="text-warning small px-3 py-2">Session expired or server error. Reload / login.</li>';
+        document.getElementById('convCount').textContent = 0;
+    }
 }
 
 function scrollMessagesToBottom(){
@@ -96,7 +108,9 @@ function scrollMessagesToBottom(){
 function renderMessages(list, append=false){
     const pane = document.getElementById('messagesPane');
     if(!append) pane.innerHTML='';
-    list.forEach(m => {
+    list.forEach(raw => {
+        // Normalize legacy / new API shapes
+        const m = raw && typeof raw === 'object' ? (raw.type ? raw : { ...raw, type:'message'}) : raw;
         if(m.type === 'separator') {
             const sep = document.createElement('div');
             sep.className = 'text-center my-3';
@@ -121,9 +135,9 @@ function renderMessages(list, append=false){
 function escapeHtml(str){ return str.replace(/[&<>]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
 
 async function loadMessages(initial=false){
-    if(!currentUserId) return;
+    if(!currentConversationId) return;
     try {
-        const url = `/chat/conversation/${currentUserId}` + (lastMessageId?('?after='+lastMessageId):'');
+        const url = `/chat/conversations/${currentConversationId}/messages` + (lastMessageId?('?after='+lastMessageId):'');
         const data = await fetchJSON(url);
         if(initial) {
             lastMessageId = 0; // reset
@@ -135,32 +149,45 @@ async function loadMessages(initial=false){
     } catch(e){ console.error(e); }
 }
 
-async function selectConversation(id, meta){
-    currentUserId = id;
-    lastMessageId = 0;
-    document.getElementById('receiverId').value = id;
-    document.getElementById('messageBody').disabled = false;
-    document.getElementById('sendBtn').disabled = false;
-    document.getElementById('conversationTitle').textContent = meta?.name || ('User #'+id);
-    document.getElementById('conversationMeta').textContent = '';
-    // Avatar initial
+async function selectConversation(userId, meta){
+    currentPartnerUserId = userId;
+    lastMessageId = 0; currentConversationId=null;
+    document.getElementById('receiverId').value = userId;
+    document.getElementById('messageBody').disabled = true;
+    document.getElementById('sendBtn').disabled = true;
+    document.getElementById('conversationTitle').textContent = meta?.name || ('User #'+userId);
+    document.getElementById('conversationMeta').textContent = 'Loading...';
     const ac = document.getElementById('avatarCircle');
-    const initial = (meta?.name||'U').substring(0,1).toUpperCase();
-    ac.textContent = initial;
-    await loadMessages(true);
+    ac.textContent = (meta?.name||'U').substring(0,1).toUpperCase();
+    try {
+        const res = await fetchJSON('/chat/open',{method:'POST',body:new URLSearchParams({user_id:userId})});
+        currentConversationId = res.conversation_id;
+        renderMessages(res.messages || [], false);
+        document.getElementById('messageBody').disabled = false;
+        document.getElementById('sendBtn').disabled = false;
+        document.getElementById('conversationMeta').textContent = '';
+        ensureRTC();
+    } catch(e){ console.error(e); document.getElementById('conversationMeta').textContent='Error'; }
 }
 
 async function sendMessage(e){
     e.preventDefault();
-    if(!currentUserId) return;
+    if(!currentConversationId) return;
     const bodyEl = document.getElementById('messageBody');
     const text = bodyEl.value.trim();
     if(!text) return;
     bodyEl.disabled = true;
     try {
-        await fetchJSON('/chat/message', { method:'POST', body: new URLSearchParams({ receiver_id: currentUserId, body: text }) });
+        const sendRes = await fetchJSON('/chat/send', { method:'POST', body: new URLSearchParams({ conversation_id: currentConversationId, body: text }) });
+        // Optimistic append (sendRes.message already plaintext)
+        if(sendRes && sendRes.message){
+            renderMessages([{...sendRes.message, type:'message'}], true);
+        }
+        // Fast path via data channel
+        if(rtcReady && rtcChannel?.readyState==='open'){
+            try { rtcChannel.send(JSON.stringify({type:'msg',body:text,ts:Date.now()})); } catch(_){ }
+        }
         bodyEl.value='';
-        await loadMessages();
         loadConversationList();
     } catch(e){ console.error(e); }
     bodyEl.disabled = false; bodyEl.focus();
@@ -189,6 +216,60 @@ bodyEl.addEventListener('input',()=>{
 });
 
 loadConversationList().then(()=>startPolling());
+
+// ================= WebRTC (simple offer/answer via REST) =================
+async function ensureRTC(){
+    if(rtcInit || !currentConversationId) return; rtcInit=true;
+    rtcPeer = new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'}]});
+    rtcChannel = rtcPeer.createDataChannel('chat');
+    rtcChannel.onopen=()=>{ rtcReady=true; };
+    rtcChannel.onmessage = ev => {
+        try { const d = JSON.parse(ev.data); if(d.type==='msg'){ renderMessages([{type:'message',id:Date.now(),body:d.body,is_me:false,time:new Date(d.ts).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}], true); } } catch(_){ }
+    };
+    rtcPeer.onicecandidate = ev => { if(ev.candidate) postSignal('candidate',{candidate:ev.candidate}); };
+    // Create offer
+    const offer = await rtcPeer.createOffer();
+    await rtcPeer.setLocalDescription(offer);
+    await postSignal('offer',{sdp:offer});
+    pollSignals();
+}
+async function postSignal(type,payload){
+    try { await fetch('/chat/conversations/'+currentConversationId+'/signal',{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-TOKEN':csrfToken,'Accept':'application/json'},body:JSON.stringify({type,payload})}); } catch(e){}
+}
+async function pollSignals(){
+    if(!currentConversationId) return;
+    try {
+    const r = await fetch(`/chat/conversations/${currentConversationId}/signals?after=${signalAfter}`,{headers:{'Accept':'application/json'}});
+        if(r.ok){
+            const data = await r.json();
+            for(const s of data.signals){ signalAfter=Math.max(signalAfter,s.id); await handleSignal(s); }
+        }
+    } catch(e){}
+    setTimeout(pollSignals,1500);
+}
+async function handleSignal(sig){
+    // ignore signals we originated (server does not echo an origin flag so just skip if needed later)
+    if(!rtcPeer || (sig.type==='offer' && rtcPeer.currentRemoteDescription)) return;
+    if(!rtcPeer || !rtcChannel){ // act as answerer
+        rtcPeer = new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'}]});
+        rtcPeer.ondatachannel = ev => { rtcChannel=ev.channel; rtcChannel.onopen=()=>rtcReady=true; rtcChannel.onmessage=ev=>{ try{const d=JSON.parse(ev.data); if(d.type==='msg'){ renderMessages([{type:'message',id:Date.now(),body:d.body,is_me:false,time:new Date(d.ts).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}], true);} }catch(_){}}; };
+        rtcPeer.onicecandidate = ev => { if(ev.candidate) postSignal('candidate',{candidate:ev.candidate}); };
+    }
+    if(sig.type==='offer' && !rtcPeer.currentRemoteDescription){
+        await rtcPeer.setRemoteDescription(new RTCSessionDescription(sig.payload.sdp));
+        const answer = await rtcPeer.createAnswer();
+        await rtcPeer.setLocalDescription(answer);
+        await postSignal('answer',{sdp:answer});
+    } else if(sig.type==='answer' && !rtcPeer.currentRemoteDescription){
+        await rtcPeer.setRemoteDescription(new RTCSessionDescription(sig.payload.sdp));
+    } else if(sig.type==='candidate' && sig.payload.candidate){
+        try { await rtcPeer.addIceCandidate(new RTCIceCandidate(sig.payload.candidate)); } catch(e){}
+    }
+}
+
+// Attempt RTC after selecting a conversation
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible' && currentConversationId) ensureRTC(); });
+
 
 </script>
 @endsection
