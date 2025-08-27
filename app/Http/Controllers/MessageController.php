@@ -213,7 +213,8 @@ class MessageController extends Controller
         $payload = [];
         $lastDate = null;
         foreach ($messages as $m) {
-            try { $body = $enc->decrypt($m->body_encrypted, 'message_body'); } catch (\Exception $e) { $body='[enc]'; }
+            // 'body' stores the ciphertext for messages (no body_encrypted column)
+            try { $body = $enc->decrypt($m->body, 'message_body'); } catch (\Exception $e) { $body='[enc]'; }
             if ($m->receiver_id === $auth->id && !$m->read_at) { // mark read lazily
                 $m->read_at = now();
                 $m->save();

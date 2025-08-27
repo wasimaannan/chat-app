@@ -140,14 +140,14 @@ class User extends Authenticatable
      */
     public function save(array $options = [])
     {
+        // Capture whether relevant attributes were dirty BEFORE persisting
+        $needsMac = $this->isDirty(['name', 'email', 'phone', 'address', 'date_of_birth']);
         $result = parent::save($options);
-        
-        // Update MAC after save if ID is available
-        if ($this->id && $this->isDirty(['name', 'email', 'phone', 'address', 'date_of_birth'])) {
+        // Generate / refresh MAC if: just obtained an id & none exists yet OR the tracked attributes changed
+        if ($this->id && (empty($this->data_mac) || $needsMac)) {
             $this->updateDataMAC();
-            parent::save(['timestamps' => false]);
+            parent::save(['timestamps' => false]); // persist MAC only (no updated_at bump)
         }
-        
         return $result;
     }
 

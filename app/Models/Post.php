@@ -123,14 +123,12 @@ class Post extends Model
      */
     public function save(array $options = [])
     {
+        $needsMac = $this->isDirty(['title', 'content', 'user_id']);
         $result = parent::save($options);
-        
-        // Update MAC after save if ID is available
-        if ($this->id && $this->isDirty(['title', 'content', 'user_id'])) {
+        if ($this->id && (empty($this->data_mac) || $needsMac)) {
             $this->updateDataMAC();
             parent::save(['timestamps' => false]);
         }
-        
         return $result;
     }
 
