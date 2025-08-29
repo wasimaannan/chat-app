@@ -6,12 +6,13 @@
     "license": "MIT",
     "require": {
         "php": "^8.1",
+        "defuse/php-encryption": "^2.4",
         "guzzlehttp/guzzle": "^7.2",
         "laravel/framework": "^10.10",
         "laravel/sanctum": "^3.2",
         "laravel/tinker": "^2.8",
-        "defuse/php-encryption": "^2.4",
-        "paragonie/halite": "^5.1"
+        "paragonie/halite": "^5.1",
+        "phpseclib/phpseclib": "3.0"
     },
     "require-dev": {
         "fakerphp/faker": "^1.9.1",

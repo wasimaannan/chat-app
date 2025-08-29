@@ -19,14 +19,15 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 // Security-related console commands
-Artisan::command('security:rotate-keys', function () {
-    $this->info('Starting key rotation...');
-    
+// Renamed to avoid collision with class-based RotateKeysCommand
+Artisan::command('security:rotate-master-keys', function () {
+    $this->info('Rotating master/data symmetric keys...');
     $keyService = app(\App\Services\KeyManagementService::class);
     $keyService->rotateKeys();
-    
-    $this->info('Key rotation completed successfully!');
-})->purpose('Rotate encryption keys for enhanced security');
+    $this->info('Master/data key rotation completed. (Does not rotate per-user RSA pairs)');
+})->purpose('Rotate master symmetric keys (NOT per-user RSA)');
+
+// Hint: use --no-rewrap to skip decrypt+re-encrypt of user fields during rotation.
 
 Artisan::command('security:verify-integrity', function () {
     $this->info('Verifying data integrity...');

@@ -29,7 +29,10 @@
             </div>
         </div>
         <div id="messagesPane" class="flex-grow-1 px-3 py-2" style="overflow-y:auto;">
-            <div class="text-muted small py-5 text-center">No conversation selected. Pick a user on the left.</div>
+            <div id="messagesContent">
+                <div class="text-muted small py-5 text-center">No conversation selected. Pick a user on the left.</div>
+            </div>
+            <div id="typingBanner" class="small text-info d-none mt-1" style="opacity:.85;">Typing…</div>
         </div>
         <form id="messageForm" class="p-2 d-flex gap-2 align-items-end border-top" autocomplete="off" style="background:#161b29;">
             <input type="hidden" id="receiverId" name="receiver_id" value="">
@@ -50,8 +53,9 @@ let currentPartnerUserId = null; // selected user id
 let currentConversationId = null; // active conversation id
 let pollHandle = null;
 let lastMessageId = 0;
+let selfUserId = null; // populated from /chat/users meta
 // WebRTC globals
-let rtcPeer = null; let rtcChannel = null; let rtcReady=false; let rtcInit=false; let signalAfter=0;
+let rtcPeer = null; let rtcChannel = null; let rtcReady=false; let rtcInit=false; let signalAfter=0; let lastOutgoingId=0;
 
 async function fetchJSON(url, opts = {}) {
     const res = await fetch(url, Object.assign({ headers:{ 'X-Requested-With':'XMLHttpRequest','Accept':'application/json','X-CSRF-TOKEN':csrfToken }}, opts));
@@ -91,6 +95,7 @@ async function loadConversationList() {
     try {
         const q = document.getElementById('userSearch').value.trim();
         const data = await fetchJSON('/chat/users'+(q?('?q='+encodeURIComponent(q)):'') );
+    if(data.meta && typeof data.meta.self_id !== 'undefined') selfUserId = data.meta.self_id;
         renderConversationList(data.users);
     } catch(e){
         console.error('Failed loading users', e);
@@ -106,8 +111,8 @@ function scrollMessagesToBottom(){
 }
 
 function renderMessages(list, append=false){
-    const pane = document.getElementById('messagesPane');
-    if(!append) pane.innerHTML='';
+    const content = document.getElementById('messagesContent');
+    if(!append) content.innerHTML='';
     list.forEach(raw => {
         // Normalize legacy / new API shapes
         const m = raw && typeof raw === 'object' ? (raw.type ? raw : { ...raw, type:'message'}) : raw;
@@ -115,17 +120,19 @@ function renderMessages(list, append=false){
             const sep = document.createElement('div');
             sep.className = 'text-center my-3';
             sep.innerHTML = `<span class=\"badge rounded-pill bg-dark border\" style=\"background:rgba(0,0,0,.35)!important;\">${escapeHtml(m.label)}</span>`;
-            pane.appendChild(sep);
+            content.appendChild(sep);
             return;
         }
         if(m.type === 'message') {
             const wrap = document.createElement('div');
             wrap.className = 'mb-2 d-flex ' + (m.is_me ? 'justify-content-end':'justify-content-start');
+            if(m.is_me) lastOutgoingId = Math.max(lastOutgoingId, m.id);
+            const seenMark = (m.is_me && m.read_at) ? ' <span class="text-info seen-flag" data-mid="'+m.id+'">Seen</span>' : (m.read_at && !m.is_me ? ' ✓':'');
             wrap.innerHTML = `<div class=\"msg-bubble ${m.is_me?'me':'other'}\" style=\"max-width:72%;\">`+
                 `<div>${escapeHtml(m.body)}</div>`+
-                `<div class=\"small text-end opacity-75 mt-1\">${m.time}${m.read_at?' ✓':''}</div>`+
+                `<div class=\"small text-end opacity-75 mt-1\">${m.time}${seenMark}</div>`+
                 `</div>`;
-            pane.appendChild(wrap);
+            content.appendChild(wrap);
             if(m.id>lastMessageId) lastMessageId = m.id;
         }
     });
@@ -181,6 +188,7 @@ async function sendMessage(e){
         const sendRes = await fetchJSON('/chat/send', { method:'POST', body: new URLSearchParams({ conversation_id: currentConversationId, body: text }) });
         // Optimistic append (sendRes.message already plaintext)
         if(sendRes && sendRes.message){
+            lastOutgoingId = sendRes.message.id;
             renderMessages([{...sendRes.message, type:'message'}], true);
         }
         // Fast path via data channel
@@ -204,15 +212,32 @@ document.getElementById('userSearch').addEventListener('input', ()=>{
 });
 document.getElementById('refreshList').addEventListener('click', ()=>loadConversationList());
 
-// Typing indicator (local only mock)
-let typingTimeout=null;
-const typingEl=document.getElementById('typingIndicator');
+// Typing indicator (real-time via signaling + data channel)
+let lastTypingSent=0, typingHideTimer=null;
+const typingBanner=document.getElementById('typingBanner');
 const bodyEl=document.getElementById('messageBody');
+function showTyping(fromUserId){
+    // Only render if conversation active and event from other user
+    if(!currentConversationId) return;
+    if(fromUserId && fromUserId === selfUserId) return; // ignore self
+    // For direct chat we know remote user id; name in header
+    const title = document.getElementById('conversationTitle').textContent || 'User';
+    typingBanner.textContent = title + ' is typing…';
+    typingBanner.classList.remove('d-none');
+    clearTimeout(typingHideTimer);
+    typingHideTimer=setTimeout(()=>typingBanner.classList.add('d-none'),1700);
+}
 bodyEl.addEventListener('input',()=>{
-    if(bodyEl.value.trim().length===0){typingEl.style.display='none';return;}
-    typingEl.style.display='flex';
-    clearTimeout(typingTimeout);
-    typingTimeout=setTimeout(()=>typingEl.style.display='none',1500);
+    const val = bodyEl.value.trim();
+    if(!currentConversationId || val.length===0) return;
+    const now=Date.now();
+    if(now - lastTypingSent > 800){
+        lastTypingSent=now;
+        postSignal('typing',{ts:now});
+        if(rtcReady && rtcChannel?.readyState==='open'){
+            try { rtcChannel.send(JSON.stringify({type:'typing',ts:now,from:selfUserId})); } catch(_){ }
+        }
+    }
 });
 
 loadConversationList().then(()=>startPolling());
@@ -224,7 +249,12 @@ async function ensureRTC(){
     rtcChannel = rtcPeer.createDataChannel('chat');
     rtcChannel.onopen=()=>{ rtcReady=true; };
     rtcChannel.onmessage = ev => {
-        try { const d = JSON.parse(ev.data); if(d.type==='msg'){ renderMessages([{type:'message',id:Date.now(),body:d.body,is_me:false,time:new Date(d.ts).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}], true); } } catch(_){ }
+        try { const d = JSON.parse(ev.data); 
+            if(d.type==='msg'){
+                renderMessages([{type:'message',id:Date.now(),body:d.body,is_me:false,time:new Date(d.ts).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}], true);
+            } else if(d.type==='typing') { showTyping(d.from); }
+            else if(d.type==='seen') { markSeenUpTo(d.last_seen_id); }
+        } catch(_){ }
     };
     rtcPeer.onicecandidate = ev => { if(ev.candidate) postSignal('candidate',{candidate:ev.candidate}); };
     // Create offer
@@ -252,9 +282,11 @@ async function handleSignal(sig){
     if(!rtcPeer || (sig.type==='offer' && rtcPeer.currentRemoteDescription)) return;
     if(!rtcPeer || !rtcChannel){ // act as answerer
         rtcPeer = new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'}]});
-        rtcPeer.ondatachannel = ev => { rtcChannel=ev.channel; rtcChannel.onopen=()=>rtcReady=true; rtcChannel.onmessage=ev=>{ try{const d=JSON.parse(ev.data); if(d.type==='msg'){ renderMessages([{type:'message',id:Date.now(),body:d.body,is_me:false,time:new Date(d.ts).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}], true);} }catch(_){}}; };
+    rtcPeer.ondatachannel = ev => { rtcChannel=ev.channel; rtcChannel.onopen=()=>rtcReady=true; rtcChannel.onmessage=ev=>{ try{const d=JSON.parse(ev.data); if(d.type==='msg'){ renderMessages([{type:'message',id:Date.now(),body:d.body,is_me:false,time:new Date(d.ts).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}], true);} else if(d.type==='typing'){ showTyping(d.from); } }catch(_){}}; };
         rtcPeer.onicecandidate = ev => { if(ev.candidate) postSignal('candidate',{candidate:ev.candidate}); };
     }
+    if(sig.type==='typing'){ showTyping(sig.from_user_id); return; }
+    if(sig.type==='seen'){ markSeenUpTo(sig.payload.last_seen_id); return; }
     if(sig.type==='offer' && !rtcPeer.currentRemoteDescription){
         await rtcPeer.setRemoteDescription(new RTCSessionDescription(sig.payload.sdp));
         const answer = await rtcPeer.createAnswer();
@@ -269,6 +301,17 @@ async function handleSignal(sig){
 
 // Attempt RTC after selecting a conversation
 document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible' && currentConversationId) ensureRTC(); });
+
+function markSeenUpTo(id){
+    if(!id) return;
+    // Mark any of our message bubbles (no existing Seen) with id <= id
+    const bubbles = document.querySelectorAll('#messagesContent .msg-bubble.me .small');
+    bubbles.forEach(b => {
+        if(!b.innerHTML.includes('Seen')){
+            b.innerHTML += ' <span class="text-info">Seen</span>';
+        }
+    });
+}
 
 
 </script>

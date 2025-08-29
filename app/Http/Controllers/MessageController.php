@@ -25,6 +25,22 @@ class MessageController extends Controller
         $this->macService = $macService;
     }
     /**
+     * Lightweight helper to record a signaling event (offer/answer/candidate/typing/seen).
+     */
+    private function emitSignal(int $conversationId, int $fromUserId, string $type, array $payload = []): void
+    {
+        try {
+            DB::table('call_signals')->insert([
+                'conversation_id' => $conversationId,
+                'from_user_id' => $fromUserId,
+                'type' => $type,
+                'payload' => json_encode($payload),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        } catch (\Throwable $e) { /* ignore */ }
+    }
+    /**
      * Resolve the currently authenticated user using multiple fallbacks.
      */
     private function currentUser(Request $request)
@@ -137,25 +153,27 @@ class MessageController extends Controller
         $q = trim($request->query('q', ''));
         $query = User::query()->where('id', '!=', $selfId)->limit(40);
         if ($q !== '') {
-            // Very limited: decrypt each candidate name/email lazily (simple approach for now)
             $query->orderBy('id');
         }
         $users = $query->get();
-
+        $encSvc = app(EncryptionService::class);
         $result = [];
         foreach ($users as $u) {
-            $name = null;
+            $name = null; $email = null;
             try {
-                $name = app(\App\Services\EncryptionService::class)->decrypt($u->name, 'user_info_name');
-            } catch (\Exception $e) {}
-            $email = null;
-            if ($q !== '') {
-                try { $email = app(\App\Services\EncryptionService::class)->decrypt($u->email, 'user_info_email'); } catch (\Exception $e) {}
-                if ($q !== '' && !str_contains(strtolower($name.$email), strtolower($q))) {
-                    continue; // skip if not matching search
-                }
+                // Prefer hybrid decrypt (falls back internally if legacy)
+                $decrypted = $encSvc->decryptUserInfoHybrid($u, ['name'=>$u->name,'email'=>$u->email]);
+                $name = $decrypted['name'] ?? null;
+                if ($q !== '') { $email = $decrypted['email'] ?? null; }
+            } catch (\Throwable $e) {
+                // Legacy fallback (older records / partial data)
+                try { $name = $encSvc->decrypt($u->name, 'user_info_name'); } catch (\Throwable $e2) { $name = null; }
+                if ($q !== '') { try { $email = $encSvc->decrypt($u->email, 'user_info_email'); } catch (\Throwable $e3) { $email = null; } }
             }
-            $lastMsg = null; $unread = 0;
+            if ($q !== '' && !str_contains(strtolower(($name ?? '').($email ?? '')), strtolower($q))) {
+                continue;
+            }
+            $lastMsg = null; $unread = 0; $snippet = null;
             if ($auth) {
                 $lastMsg = Message::where(function($x) use ($auth,$u){
                     $x->where('sender_id',$auth->id)->where('receiver_id',$u->id);
@@ -164,11 +182,21 @@ class MessageController extends Controller
                 })->latest()->first();
                 $unread = Message::where('sender_id',$u->id)->where('receiver_id',$auth->id)->whereNull('read_at')->count();
             }
-            $snippet = null;
             if ($lastMsg) {
-                // Encrypted payload stored in 'body' (not body_encrypted); broad catch to avoid TypeError fatal
-                try { $snippet = app(\App\Services\EncryptionService::class)->decrypt($lastMsg->body, 'message_body'); }
-                catch (\Throwable $e) { $snippet='[enc]'; }
+                try {
+                    // Try hybrid-style (iv:tag:cipher) detection first
+                    $bodyCipher = $lastMsg->body;
+                    if (substr_count($bodyCipher, ':') === 2) {
+                        // Use Message model helper for consistency
+                        $snippet = $lastMsg->decrypted_body ?? null; // accessor if defined; else fallback below
+                        if (!$snippet) { throw new \RuntimeException('Accessor missing'); }
+                    } else {
+                        $snippet = $encSvc->decrypt($bodyCipher, 'message_body');
+                    }
+                } catch (\Throwable $e) {
+                    // Fallback to legacy decrypt or mark encrypted
+                    try { $snippet = $encSvc->decrypt($lastMsg->body, 'message_body'); } catch (\Throwable $e2) { $snippet='[enc]'; }
+                }
                 if (is_string($snippet) && strlen($snippet) > 40) { $snippet = substr($snippet,0,40).'…'; }
             }
             $result[] = [
@@ -176,16 +204,10 @@ class MessageController extends Controller
                 'name' => $name,
                 'last_message' => $snippet,
                 'unread' => $unread,
-                // Placeholder presence (could be replaced with real-time presence service)
                 'online' => true,
             ];
         }
-        \Log::debug('chat.users', [
-            'selfId'=>$selfId,
-            'q'=>$q,
-            'returned'=>count($result),
-            'total_users'=>User::count()
-        ]);
+        \Log::debug('chat.users', [ 'selfId'=>$selfId, 'q'=>$q, 'returned'=>count($result), 'total_users'=>User::count() ]);
         return response()->json(['users'=>$result,'meta'=>['self_id'=>$selfId,'total'=>User::count()]]);
     }
 
@@ -242,25 +264,24 @@ class MessageController extends Controller
     // Store (JSON variant)
     public function storeJson(Request $request)
     {
-        // Validation: previous version incorrectly used different:receiver_id (always fails comparing field to itself)
         $data = $request->validate([
             'receiver_id' => 'required|exists:users,id',
             'body' => 'required|string|max:5000',
         ]);
-    $auth = $this->currentUser($request);
-    if (!$auth) { return response()->json(['error'=>'Unauthenticated']); }
-    $receiverId = (int)$request->input('receiver_id');
-    if ($receiverId === $auth->id) {
-            return response()->json(['error'=>'Cannot message yourself'], 422);
+        $auth = $this->currentUser($request);
+        if (!$auth) { return response()->json(['error' => 'Unauthenticated']); }
+        $receiverId = (int)$request->input('receiver_id');
+        if ($receiverId === $auth->id) {
+            return response()->json(['error' => 'Cannot message yourself'], 422);
         }
         $msg = new Message();
-    $msg->sender_id = $auth->id;
+        $msg->sender_id = $auth->id;
         $msg->receiver_id = $receiverId;
         $msg->setEncryptedBody($data['body']);
         $msg->save();
         $msg->updateDataMAC();
         $msg->save();
-        return response()->json(['status'=>'ok','id'=>$msg->id]);
+        return response()->json(['status' => 'ok', 'id' => $msg->id]);
     }
 
     // === New Conversation-based API ===
@@ -272,13 +293,20 @@ class MessageController extends Controller
         $other = (int)$data['user_id'];
         if($other === $auth->id) return response()->json(['error'=>'self'],422);
         $conv = $this->conversationService->findOrCreateDirect($auth->id, $other);
+    // Mark unread inbound messages as read now and emit seen signal
+    $updated = \App\Models\Message::where('conversation_id',$conv->id)->where('receiver_id',$auth->id)->whereNull('read_at')->update(['read_at'=>now()]);
+    if($updated>0){
+        $lastSeenId = \App\Models\Message::where('conversation_id',$conv->id)->where('receiver_id',$auth->id)->max('id');
+        if($lastSeenId){ $this->emitSignal($conv->id, $auth->id, 'seen', ['last_seen_id'=>$lastSeenId]); }
+    }
         $messages = $conv->messages()->orderByDesc('id')->limit(60)->get()->sortBy('id')->values()->map(function($m) use ($auth){
             $plain = null; try { $plain = $this->encryptionService->decrypt($m->body,'message_body'); } catch(\Throwable $e){ $plain='[enc]'; }
             return [
                 'id'=>$m->id,
                 'body'=>$plain,
                 'is_me'=>$m->sender_id===$auth->id,
-                'time'=>$m->created_at->format('H:i')
+        'time'=>$m->created_at->format('H:i'),
+        'read_at'=>$m->read_at ? $m->read_at->timestamp : null,
             ];
         });
         return response()->json(['conversation_id'=>$conv->id,'messages'=>$messages]);
@@ -297,7 +325,7 @@ class MessageController extends Controller
             return response()->json(['error'=>'target_missing'],422);
         }
         if(!empty($data['user_id']) && (int)$data['user_id']===$auth->id) {
-            return response()->json(['error'=>'self'],422);
+            return response()->json([ 'error' => 'self' ], 422);
         }
         $conv = null;
         if(!empty($data['conversation_id'])) {
@@ -328,7 +356,8 @@ class MessageController extends Controller
             'id'=>$msg->id,
             'body'=>$plain,
             'is_me'=>true,
-            'time'=>$msg->created_at->format('H:i')
+            'time'=>$msg->created_at->format('H:i'),
+            'read_at'=>null
         ],'conversation_id'=>$conv->id]);
     }
 
@@ -340,13 +369,20 @@ class MessageController extends Controller
         $conv = Conversation::forUser($auth->id)->where('id',$id)->firstOrFail();
         $query = $conv->messages()->orderBy('id');
         if($after>0) $query->where('id','>',$after);
+        // Mark unread inbound and emit seen
+        $updated = \App\Models\Message::where('conversation_id',$conv->id)->where('receiver_id',$auth->id)->whereNull('read_at')->update(['read_at'=>now()]);
+        if($updated>0){
+            $lastSeenId = \App\Models\Message::where('conversation_id',$conv->id)->where('receiver_id',$auth->id)->max('id');
+            if($lastSeenId){ $this->emitSignal($conv->id, $auth->id, 'seen', ['last_seen_id'=>$lastSeenId]); }
+        }
         $rows = $query->limit(120)->get()->map(function($m) use ($auth){
             $plain=null; try { $plain=$this->encryptionService->decrypt($m->body,'message_body'); } catch(\Throwable $e){ $plain='[enc]'; }
             return [
                 'id'=>$m->id,
                 'body'=>$plain,
                 'is_me'=>$m->sender_id===$auth->id,
-                'time'=>$m->created_at->format('H:i')
+                'time'=>$m->created_at->format('H:i'),
+                'read_at'=>$m->read_at ? $m->read_at->timestamp : null,
             ];
         });
         return response()->json(['messages'=>$rows]);
@@ -361,7 +397,8 @@ class MessageController extends Controller
             'type'=>'required|string|max:32',
             'payload'=>'nullable|array'
         ]);
-        $allowed=['offer','answer','candidate','bye'];
+    // Allow ephemeral typing + seen indicator events
+    $allowed=['offer','answer','candidate','bye','typing','seen'];
         if(!in_array($data['type'],$allowed)) return response()->json(['error'=>'type'],422);
         DB::table('call_signals')->insert([
             'conversation_id'=>$conv->id,

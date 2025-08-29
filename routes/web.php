@@ -57,6 +57,9 @@ Route::middleware(['secure.auth'])->group(function () {
     // New chatty_cat modern UI
     Route::get('/chat', [MessageController::class, 'chat'])->name('chat.index');
     Route::get('/chat/users', [MessageController::class, 'users'])->name('chat.users');
-    Route::get('/chat/conversation/{userId}', [MessageController::class, 'conversationJson'])->name('chat.conversation.json');
-    Route::post('/chat/message', [MessageController::class, 'storeJson'])->name('chat.message.store');
+    Route::post('/chat/open', [MessageController::class, 'openDirect'])->name('chat.open');
+    Route::get('/chat/conversations/{id}/messages', [MessageController::class, 'messages'])->name('chat.conversation.messages');
+    Route::post('/chat/send', [MessageController::class, 'send'])->name('chat.message.send');
+    Route::post('/chat/conversations/{id}/signal', [MessageController::class, 'signal'])->name('chat.conversation.signal');
+    Route::get('/chat/conversations/{id}/signals', [MessageController::class, 'fetchSignals'])->name('chat.conversation.signals');
 });

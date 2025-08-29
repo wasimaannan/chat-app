@@ -8,6 +8,7 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
     <link href="/css/chatty.css" rel="stylesheet">
+    <link href="/css/modern-ui.css" rel="stylesheet">
     <style>
         :root {
             --cc-bg: linear-gradient(135deg,#1b1f3a,#252d5a 40%,#3d1f54);
@@ -19,7 +20,7 @@
             --cc-glow: 0 0 0 0 rgba(255,159,67,.4);
             --cc-text:#eceff8;
         }
-        body { background:var(--cc-bg); background-attachment:fixed; color:var(--cc-text); font-family:'Nunito', sans-serif; min-height:100vh; }
+    body { background:var(--cc-bg); background-attachment:fixed; color:var(--cc-text); font-family:'Nunito', sans-serif; min-height:100vh; -webkit-font-smoothing:antialiased; }
     .navbar { background:rgba(20,24,45,.75)!important; backdrop-filter: blur(12px); border-bottom:1px solid rgba(255,255,255,.05); position:relative; z-index:6000; }
         .navbar-brand { font-weight:700; letter-spacing:.5px; display:flex; align-items:center; }
         .navbar-brand .brand-icon { color:var(--cc-accent); margin-right:.55rem; filter:drop-shadow(0 0 6px rgba(255,159,67,.5)); animation:catPulse 3s ease-in-out infinite; }
@@ -46,6 +47,9 @@
                 <i class="fas fa-cat brand-icon"></i>
                 chatty_cat <span class="chat-badge">beta</span>
             </a>
+            <button id="themeToggle" class="btn btn-sm btn-outline-light ms-2" type="button" title="Toggle theme" style="--bs-btn-padding-y:.35rem;--bs-btn-padding-x:.65rem;">
+                <i class="fas fa-sun"></i>
+            </button>
             
             @if(session('user_id'))
             <div class="navbar-nav ms-auto">
@@ -128,7 +132,30 @@
     </footer>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script>// layout base JS placeholder</script>
+    <script>
+    (function(){
+        const stored = localStorage.getItem('cc_theme');
+        if(stored){ document.documentElement.setAttribute('data-theme', stored); }
+        function updateIcon(){
+            const mode = document.documentElement.getAttribute('data-theme')||'dark';
+            const btn = document.getElementById('themeToggle'); if(!btn) return;
+            btn.innerHTML = mode==='light'?'<i class="fas fa-moon"></i>':'<i class="fas fa-sun"></i>';
+        }
+        document.addEventListener('DOMContentLoaded', ()=>{
+            updateIcon();
+            const btn = document.getElementById('themeToggle');
+            if(btn){
+                btn.addEventListener('click', ()=>{
+                    const cur = document.documentElement.getAttribute('data-theme')||'dark';
+                    const next = cur==='dark'?'light':'dark';
+                    document.documentElement.setAttribute('data-theme', next);
+                    localStorage.setItem('cc_theme', next);
+                    updateIcon();
+                });
+            }
+        });
+    })();
+    </script>
     @yield('scripts')
 </body>
 </html>

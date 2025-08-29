@@ -8,6 +8,7 @@ use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use App\Services\EncryptionService;
 use App\Services\MACService;
+use App\Services\KeyManagementService;
 
 class User extends Authenticatable
 {
@@ -27,7 +28,9 @@ class User extends Authenticatable
         'password_salt',
         'data_mac',
         'email_verified_at',
-        'is_active'
+        'is_active',
+        'wrapped_userinfo_key',
+        'key_pair_id'
     ];
 
     /**
@@ -38,6 +41,7 @@ class User extends Authenticatable
         'password_salt',
         'data_mac',
         'remember_token',
+        'wrapped_userinfo_key'
     ];
 
     /**
@@ -49,11 +53,31 @@ class User extends Authenticatable
     ];
 
     /**
+     * The "booted" method of the model.
+     */
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::created(function (User $user) {
+            app(KeyManagementService::class)->ensureUserKeyPair($user);
+        });
+    }
+
+    /**
      * Relationship with posts
      */
     public function posts()
     {
         return $this->hasMany(Post::class);
+    }
+
+    /**
+     * Relationship with key pair
+     */
+    public function keyPair()
+    {
+        return $this->belongsTo(KeyPair::class);
     }
 
     /**
@@ -63,7 +87,7 @@ class User extends Authenticatable
     {
         $encryptionService = app(EncryptionService::class);
         
-        return $encryptionService->decryptUserInfo([
+        return $encryptionService->decryptUserInfoHybrid($this, [
             'name' => $this->name,
             'email' => $this->email,
             'phone' => $this->phone,
@@ -79,19 +103,11 @@ class User extends Authenticatable
     {
         $encryptionService = app(EncryptionService::class);
         $macService = app(MACService::class);
-        
-        // Encrypt user data
-        $encryptedData = $encryptionService->encryptUserInfo($userData);
-        
-        // Set encrypted attributes
+        $kms = app(KeyManagementService::class);
+        if ($this->id) { $kms->ensureUserKeyPair($this); }
+        $encryptedData = $encryptionService->encryptUserInfoHybrid($this, $userData);
         $this->fill($encryptedData);
-
-        // Maintain deterministic email hash for fast lookups (lowercase SHA-256 of decrypted email)
-        if (!empty($userData['email'])) {
-            $this->email_hash = hash('sha256', strtolower(trim($userData['email'])));
-        }
-        
-        // Generate MAC for data integrity
+        if (!empty($userData['email'])) { $this->email_hash = hash('sha256', strtolower(trim($userData['email']))); }
         $this->data_mac = $macService->generateUserDataMAC($encryptedData, $this->id ?? 0);
     }
 
@@ -100,20 +116,9 @@ class User extends Authenticatable
      */
     public function verifyIntegrity(): bool
     {
-        if (empty($this->data_mac)) {
-            return true; // Allow for backward compatibility
-        }
-        
+        if (empty($this->data_mac)) { return true; }
         $macService = app(MACService::class);
-        
-        $userData = [
-            'name' => $this->name,
-            'email' => $this->email,
-            'phone' => $this->phone,
-            'address' => $this->address,
-            'date_of_birth' => $this->date_of_birth
-        ];
-        
+        $userData = [ 'name'=>$this->name,'email'=>$this->email,'phone'=>$this->phone,'address'=>$this->address,'date_of_birth'=>$this->date_of_birth ];
         return $macService->verifyUserDataMAC($userData, $this->id, $this->data_mac);
     }
 
@@ -123,15 +128,7 @@ class User extends Authenticatable
     public function updateDataMAC(): void
     {
         $macService = app(MACService::class);
-        
-        $userData = [
-            'name' => $this->name,
-            'email' => $this->email,
-            'phone' => $this->phone,
-            'address' => $this->address,
-            'date_of_birth' => $this->date_of_birth
-        ];
-        
+        $userData = [ 'name'=>$this->name,'email'=>$this->email,'phone'=>$this->phone,'address'=>$this->address,'date_of_birth'=>$this->date_of_birth ];
         $this->data_mac = $macService->generateUserDataMAC($userData, $this->id);
     }
 
@@ -140,13 +137,11 @@ class User extends Authenticatable
      */
     public function save(array $options = [])
     {
-        // Capture whether relevant attributes were dirty BEFORE persisting
-        $needsMac = $this->isDirty(['name', 'email', 'phone', 'address', 'date_of_birth']);
+        $needsMac = $this->isDirty(['name','email','phone','address','date_of_birth']);
         $result = parent::save($options);
-        // Generate / refresh MAC if: just obtained an id & none exists yet OR the tracked attributes changed
         if ($this->id && (empty($this->data_mac) || $needsMac)) {
             $this->updateDataMAC();
-            parent::save(['timestamps' => false]); // persist MAC only (no updated_at bump)
+            parent::save(['timestamps'=>false]);
         }
         return $result;
     }
@@ -156,12 +151,7 @@ class User extends Authenticatable
      */
     public function getFullNameAttribute(): string
     {
-        try {
-            $encryptionService = app(EncryptionService::class);
-            return $encryptionService->decrypt($this->name, 'user_info_name');
-        } catch (\Exception $e) {
-            return '[ENCRYPTED]';
-        }
+        try { return $this->getDecryptedData()['name'] ?? '[ENCRYPTED]'; } catch (\Exception $e) { return '[ENCRYPTED]'; }
     }
 
     /**
@@ -169,11 +159,6 @@ class User extends Authenticatable
      */
     public function getEmailAddressAttribute(): string
     {
-        try {
-            $encryptionService = app(EncryptionService::class);
-            return $encryptionService->decrypt($this->email, 'user_info_email');
-        } catch (\Exception $e) {
-            return '[ENCRYPTED]';
-        }
+        try { return $this->getDecryptedData()['email'] ?? '[ENCRYPTED]'; } catch (\Exception $e) { return '[ENCRYPTED]'; }
     }
 }
