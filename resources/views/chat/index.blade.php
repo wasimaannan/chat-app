@@ -3,6 +3,20 @@
 @section('title','chatty_cat')
 
 @section('content')
+<style>
+/* Chat bubble styling */
+.msg-bubble {\n    padding:.55rem .75rem;\n    border-radius:16px;\n    background:#1d2534;\n    color:#e6ebf3;\n    font-size:.95rem;\n    line-height:1.3;\n    position:relative;\n    word-break:break-word;\n    box-shadow:0 2px 4px -2px rgba(0,0,0,.4);\n    transition:background .25s ease, transform .15s ease;\n}
+.msg-bubble.other {\n    background:#1e2738;\n    border:1px solid #253042;\n}
+.msg-bubble.me {\n    background:linear-gradient(135deg,#ff8a5c,#ff5f7e);\n    color:#fff;\n    box-shadow:0 4px 14px -4px rgba(255,101,112,.55);\n    border:1px solid rgba(255,255,255,.15);\n}
+.msg-bubble.me .small {\n    color:rgba(255,255,255,.8)!important;\n}
+.msg-bubble.other .small {\n    color:rgba(255,255,255,.55)!important;\n}
+.msg-bubble:hover {\n    transform:translateY(-2px);\n}
+/* Subtle tail using pseudo elements */
+.msg-bubble.me:after, .msg-bubble.other:after {\n    content:"";\n    position:absolute;\n    bottom:0;\n    width:12px;\n    height:12px;\n    transform:translateY(45%) rotate(45deg);\n    border-radius:2px;\n}
+.msg-bubble.me:after {\n    right:6px;\n    background:linear-gradient(135deg,#ff8a5c,#ff5f7e);\n}
+.msg-bubble.other:after {\n    left:6px;\n    background:#1e2738;\n}
+@media (prefers-reduced-motion:reduce){ .msg-bubble:hover{transform:none;} }
+</style>
 <div id="chat-app" class="row g-0" style="min-height:72vh;border-radius:18px;overflow:hidden;background:#1b2033;box-shadow:0 4px 18px -6px rgba(0,0,0,.5);">
     <div class="col-12 col-md-4 col-lg-3 d-flex flex-column" style="background:#161b29;">
         <div class="p-3 border-bottom d-flex align-items-center">

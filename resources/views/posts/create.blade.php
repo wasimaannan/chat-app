@@ -5,15 +5,16 @@
 @section('content')
 <style>
 /* Scoped readability & custom write color for create post card */
-.post-create-card { color:#212529 !important; }
+/* Converted previous dark (#212529) text to white for better contrast on dark background */
+.post-create-card { color:#ffffff !important; }
 .post-create-card h1,.post-create-card h2,.post-create-card h3,
 .post-create-card h4,.post-create-card h5,.post-create-card h6,
-.post-create-card .form-label, .post-create-card label, .post-create-card small { color:#212529 !important; }
+.post-create-card .form-label, .post-create-card label, .post-create-card small { color:#ffffff !important; }
 /* Typing (write) color */
 .post-create-card input, .post-create-card textarea { color:#ffffff !important; }
 /* Placeholder color adjusted to grey */
 .post-create-card input::placeholder, .post-create-card textarea::placeholder { color:#6c757d !important; opacity:1; }
-.post-create-card .text-muted { color:#495057 !important; }
+.post-create-card .text-muted { color:#b2b8c2 !important; }
 </style>
 <div class="row justify-content-center">
     <div class="col-md-10">
