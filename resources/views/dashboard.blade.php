@@ -70,7 +70,7 @@
                     <div class="text-center py-4">
                         <i class="fas fa-file-alt fa-3x text-muted mb-3"></i>
                         <h5 class="text-muted">No posts yet</h5>
-                        <p class="text-muted">Start sharing your thoughts securely!</p>
+                        <p class="text-muted">Start sharing your thoughts!</p>
                         <a href="{{ route('posts.create') }}" class="btn btn-primary">
                             <i class="fas fa-plus"></i> Create Your First Post
                         </a>

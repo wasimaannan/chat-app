@@ -61,9 +61,7 @@
             </div>
         </div>
 
-        <div class="mt-4 small text-muted">
-            <i class="fas fa-lock me-1 text-success"></i>Your profile fields are stored encrypted. Minimal personal data is displayed.
-        </div>
+    {{-- Removed encryption notice per request --}}
     </div>
 </div>
 @endsection

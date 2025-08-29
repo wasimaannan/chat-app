@@ -1,24 +1,31 @@
 @extends('layout')
 
-@section('title', 'Create Post - Secure App')
+@section('title', 'Create Post')
 
 @section('content')
+<style>
+/* Scoped readability & custom write color for create post card */
+.post-create-card { color:#212529 !important; }
+.post-create-card h1,.post-create-card h2,.post-create-card h3,
+.post-create-card h4,.post-create-card h5,.post-create-card h6,
+.post-create-card .form-label, .post-create-card label, .post-create-card small { color:#212529 !important; }
+/* Typing (write) color */
+.post-create-card input, .post-create-card textarea { color:#ffffff !important; }
+/* Placeholder color adjusted to grey */
+.post-create-card input::placeholder, .post-create-card textarea::placeholder { color:#6c757d !important; opacity:1; }
+.post-create-card .text-muted { color:#495057 !important; }
+</style>
 <div class="row justify-content-center">
     <div class="col-md-10">
-        <div class="card">
+    <div class="card post-create-card">
             <div class="card-header bg-primary text-white">
                 <h4 class="mb-0">
                     <i class="fas fa-plus"></i> 
                     Create New Post
-                    <span class="security-badge">Will be Encrypted</span>
                 </h4>
             </div>
             <div class="card-body">
-                <div class="alert alert-info">
-                    <i class="fas fa-shield-alt"></i>
-                    <strong>Security Notice:</strong> Your post content will be encrypted before storage and 
-                    protected with integrity verification (MAC). Only you and authorized users can decrypt and read the content.
-                </div>
+                {{-- Removed security notice per request --}}
                 
                 <form action="{{ route('posts.store') }}" method="POST">
                     @csrf
@@ -38,9 +45,7 @@
                         @error('title')
                             <div class="invalid-feedback">{{ $message }}</div>
                         @enderror
-                        <small class="text-muted">
-                            <i class="fas fa-lock text-success"></i> Will be encrypted before storage
-                        </small>
+                        {{-- Removed encryption hint --}}
                     </div>
                     
                     <div class="mb-3">
@@ -57,9 +62,7 @@
                         @error('content')
                             <div class="invalid-feedback">{{ $message }}</div>
                         @enderror
-                        <small class="text-muted">
-                            <i class="fas fa-lock text-success"></i> Will be encrypted before storage
-                        </small>
+                        {{-- Removed encryption hint --}}
                     </div>
                     
                     <div class="mb-3">
@@ -80,31 +83,11 @@
                         </small>
                     </div>
                     
-                    <div class="mb-3">
-                        <div class="card bg-light">
-                            <div class="card-body">
-                                <h6><i class="fas fa-shield-alt text-success"></i> Security Features Applied:</h6>
-                                <div class="row">
-                                    <div class="col-md-6">
-                                        <ul class="list-unstyled small">
-                                            <li><i class="fas fa-check text-success"></i> Title encryption</li>
-                                            <li><i class="fas fa-check text-success"></i> Content encryption</li>
-                                        </ul>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <ul class="list-unstyled small">
-                                            <li><i class="fas fa-check text-success"></i> Data integrity verification (MAC)</li>
-                                            <li><i class="fas fa-check text-success"></i> Secure key management</li>
-                                        </ul>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                    {{-- Removed security features applied card --}}
                     
                     <div class="d-flex gap-2">
                         <button type="submit" class="btn btn-primary">
-                            <i class="fas fa-save"></i> Create Post Securely
+                            <i class="fas fa-save"></i> Create Post
                         </button>
                         <a href="{{ route('posts.index') }}" class="btn btn-outline-secondary">
                             <i class="fas fa-times"></i> Cancel

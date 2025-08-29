@@ -14,7 +14,6 @@
     <h2>
         <i class="fas fa-list"></i> 
         All Posts
-        <span class="security-badge">Encrypted</span>
     </h2>
     <a href="{{ route('posts.create') }}" class="btn btn-primary">
         <i class="fas fa-plus"></i> Create New Post
@@ -54,11 +53,7 @@
                                 <span class="badge bg-secondary">Draft</span>
                             @endif
                         </div>
-                        <div class="mt-2">
-                            <small class="text-success">
-                                <i class="fas fa-lock"></i> Content encrypted & integrity verified
-                            </small>
-                        </div>
+                        {{-- Removed encryption status line --}}
                     </div>
                     <div class="card-footer">
                         <a href="{{ route('posts.show', $post['id']) }}" class="btn btn-outline-primary btn-sm">
@@ -73,23 +68,12 @@
     <div class="text-center py-5">
         <i class="fas fa-file-alt fa-4x text-muted mb-3"></i>
         <h4 class="text-muted">No posts available</h4>
-        <p class="text-muted">Be the first to share something securely!</p>
+    <p class="text-muted">Be the first to share something!</p>
         <a href="{{ route('posts.create') }}" class="btn btn-primary">
             <i class="fas fa-plus"></i> Create First Post
         </a>
     </div>
 @endif
 
-<div class="mt-4">
-    <div class="card bg-light">
-        <div class="card-body">
-            <h6><i class="fas fa-info-circle"></i> Security Information</h6>
-            <p class="small mb-0">
-                All posts on this platform are encrypted end-to-end. Post content, titles, and author information 
-                are encrypted before storage and verified for integrity using cryptographic signatures (MAC). 
-                Even if someone gains access to the database, they cannot read the actual content without the encryption keys.
-            </p>
-        </div>
-    </div>
-</div>
+{{-- Removed security info notice card as requested --}}
 @endsection
