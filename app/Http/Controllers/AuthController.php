@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
@@ -214,9 +215,9 @@ class AuthController extends Controller
         if (!$user) {
             return redirect()->route('login');
         }
-        
+        // Always reload the user from the database to get the latest fields
+        $user = \App\Models\User::find($user->id);
         $decryptedData = $user->getDecryptedData();
-        
         return view('auth.profile', compact('user', 'decryptedData'));
     }
     
@@ -224,6 +225,7 @@ class AuthController extends Controller
      * Update user profile
      */
     public function updateProfile(Request $request)
+    // moved debug log into try block to avoid syntax error
     {
         $user = $this->getCurrentUser();
         if (!$user) {
@@ -236,6 +238,8 @@ class AuthController extends Controller
             'phone' => 'nullable|string|max:20',
             'address' => 'nullable|string|max:500',
             'date_of_birth' => 'nullable|date',
+            'bio' => 'nullable|string|max:1000',
+            'profile_picture' => 'nullable|file|image|mimes:jpeg,png|max:2048',
         ]);
         
         if ($validator->fails()) {
@@ -243,6 +247,13 @@ class AuthController extends Controller
         }
         
         try {
+            Log::info('Profile update: starting', [
+                'user_id' => $user->id,
+                'has_file' => $request->hasFile('profile_picture'),
+                'file_valid' => $request->hasFile('profile_picture') ? $request->file('profile_picture')->isValid() : null,
+                'request_files' => $request->allFiles(),
+                'request_data' => $request->all(),
+            ]);
             // Update user data with encryption
             $userData = [
                 'name' => $request->name,
@@ -250,15 +261,67 @@ class AuthController extends Controller
                 'phone' => $request->phone,
                 'address' => $request->address,
                 'date_of_birth' => $request->date_of_birth,
+                'bio' => $request->bio,
             ];
-            
-            $user->setEncryptedData($userData);
+
+            // Handle profile picture upload and encryption FIRST
+            $newProfilePicEncrypted = null;
+            $newProfilePicMime = null;
+            if ($request->hasFile('profile_picture')) {
+                Log::info('Profile update: file detected', [
+                    'user_id' => $user->id,
+                    'file_valid' => $request->file('profile_picture')->isValid(),
+                    'file_info' => $request->file('profile_picture'),
+                ]);
+            }
+            if ($request->hasFile('profile_picture') && $request->file('profile_picture')->isValid()) {
+                $imageFile = $request->file('profile_picture');
+                Log::info('Profile update: file upload details', [
+                    'original_name' => $imageFile->getClientOriginalName(),
+                    'mime' => $imageFile->getMimeType(),
+                    'size' => $imageFile->getSize(),
+                ]);
+                $image = file_get_contents($imageFile->getRealPath());
+                $mime = $imageFile->getMimeType();
+                $encryptionService = app(\App\Services\EncryptionService::class);
+                $newProfilePicEncrypted = $encryptionService->encrypt($image, 'profile_picture');
+                $newProfilePicMime = $mime;
+                Log::info('Profile update: picture uploaded', [
+                    'user_id' => $user->id,
+                    'mime' => $mime,
+                    'encrypted_length' => strlen($newProfilePicEncrypted),
+                ]);
+            } else {
+                Log::info('Profile update: no valid picture uploaded', [
+                    'user_id' => $user->id
+                ]);
+            }
+
+            $user->setEncryptedData($userData, $newProfilePicEncrypted, $newProfilePicMime);
+            // Save bio as a separate column (not encrypted)
+            $user->bio = $request->bio;
+            // Ensure profile_picture is set directly before save
+            if ($newProfilePicEncrypted !== null) {
+                $user->profile_picture = $newProfilePicEncrypted;
+            }
+            Log::info('Profile update: saving user', [
+                'user_id' => $user->id,
+                'profile_picture_set' => isset($user->profile_picture),
+                'profile_picture_length' => isset($user->profile_picture) ? strlen($user->profile_picture) : null,
+            ]);
             $user->save();
-            
+
+            Log::info('Profile update: after save', [
+                'user_id' => $user->id,
+                'profile_picture' => $user->profile_picture,
+            ]);
+
             return back()->with('success', 'Profile updated successfully!');
-            
+
         } catch (\Exception $e) {
-            \Log::error('Profile update failed: ' . $e->getMessage());
+            \Log::error('Profile update failed: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+            ]);
             return back()->withErrors(['error' => 'Profile update failed. Please try again.']);
         }
     }

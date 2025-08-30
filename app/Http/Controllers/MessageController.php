@@ -151,7 +151,8 @@ class MessageController extends Controller
         $auth = $this->currentUser($request);
         $selfId = $auth?->id ?? 0;
         $q = trim($request->query('q', ''));
-        $query = User::query()->where('id', '!=', $selfId)->limit(40);
+    // Always exclude the sender (current user) from the chat list
+    $query = User::query()->where('id', '!=', $selfId)->limit(40);
         if ($q !== '') {
             $query->orderBy('id');
         }

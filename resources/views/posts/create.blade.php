@@ -87,7 +87,7 @@
                     {{-- Removed security features applied card --}}
                     
                     <div class="d-flex gap-2">
-                        <button type="submit" class="btn btn-primary">
+                        <button type="submit" class="btn btn-gradient">
                             <i class="fas fa-save"></i> Create Post
                         </button>
                         <a href="{{ route('posts.index') }}" class="btn btn-outline-secondary">

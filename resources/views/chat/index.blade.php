@@ -3,38 +3,99 @@
 @section('title','chatty_cat')
 
 @section('content')
+</style>
 <style>
-/* Chat bubble styling */
-.msg-bubble {\n    padding:.55rem .75rem;\n    border-radius:16px;\n    background:#1d2534;\n    color:#e6ebf3;\n    font-size:.95rem;\n    line-height:1.3;\n    position:relative;\n    word-break:break-word;\n    box-shadow:0 2px 4px -2px rgba(0,0,0,.4);\n    transition:background .25s ease, transform .15s ease;\n}
-.msg-bubble.other {\n    background:#1e2738;\n    border:1px solid #253042;\n}
-.msg-bubble.me {\n    background:linear-gradient(135deg,#ff8a5c,#ff5f7e);\n    color:#fff;\n    box-shadow:0 4px 14px -4px rgba(255,101,112,.55);\n    border:1px solid rgba(255,255,255,.15);\n}
-.msg-bubble.me .small {\n    color:rgba(255,255,255,.8)!important;\n}
-.msg-bubble.other .small {\n    color:rgba(255,255,255,.55)!important;\n}
-.msg-bubble:hover {\n    transform:translateY(-2px);\n}
+/* Pookie conversation list selected user */
+.conversation-item.bg-secondary {
+    background: linear-gradient(90deg, #fbc2eb 0%, #e0e7ff 100%) !important;
+    color: #7f53ac !important;
+    border-radius: 1.2rem;
+    font-weight: 700;
+    box-shadow: 0 2px 8px -2px #fbc2eb55;
+    border: 2px solid #fbc2eb88;
+    margin: 0.2rem 0;
+    font-family: 'Nunito', cursive, sans-serif;
+    letter-spacing: 0.2px;
+}
+/* Pookie chat bubble styling */
+.msg-bubble {
+    padding:.7rem 1.1rem;
+    border-radius:2rem 2rem 2rem 0.7rem;
+    background:linear-gradient(120deg,#fbc2eb 0%,#e0e7ff 100%);
+    color:#7f53ac;
+    font-size:1.05rem;
+    font-family:'Nunito',cursive,sans-serif;
+    line-height:1.5;
+    position:relative;
+    word-break:break-word;
+    box-shadow:0 4px 18px -8px #fbc2eb55,0 1.5px 8px 0 #7f53ac11;
+    transition:background .25s, transform .15s;
+    border:2px solid #fbc2eb55;
+}
+.msg-bubble.other {
+    background:linear-gradient(120deg,#e0e7ff 0%,#fbc2eb 100%);
+    border:2px solid #7f53ac22;
+    color:#5e3a8c;
+}
+.msg-bubble.me {
+    background:linear-gradient(120deg,#7f53ac 0%,#fbc2eb 100%);
+    color:#fff;
+    box-shadow:0 6px 20px -8px #7f53ac55;
+    border:2px solid #7f53ac55;
+}
+.msg-bubble.me .small {
+    color:rgba(255,255,255,.85)!important;
+}
+.msg-bubble.other .small {
+    color:#7f53ac!important;
+}
+.msg-bubble:hover {
+    transform:translateY(-3px) scale(1.03) rotate(-1deg);
+    box-shadow:0 8px 24px -8px #fbc2eb88;
+}
 /* Subtle tail using pseudo elements */
-.msg-bubble.me:after, .msg-bubble.other:after {\n    content:"";\n    position:absolute;\n    bottom:0;\n    width:12px;\n    height:12px;\n    transform:translateY(45%) rotate(45deg);\n    border-radius:2px;\n}
-.msg-bubble.me:after {\n    right:6px;\n    background:linear-gradient(135deg,#ff8a5c,#ff5f7e);\n}
-.msg-bubble.other:after {\n    left:6px;\n    background:#1e2738;\n}
+/* Removed cat paw from chat bubbles */
 @media (prefers-reduced-motion:reduce){ .msg-bubble:hover{transform:none;} }
 </style>
-<div id="chat-app" class="row g-0" style="min-height:72vh;border-radius:18px;overflow:hidden;background:#1b2033;box-shadow:0 4px 18px -6px rgba(0,0,0,.5);">
-    <div class="col-12 col-md-4 col-lg-3 d-flex flex-column" style="background:#161b29;">
+</style>
+<div id="chat-app" class="row g-0" style="min-height:72vh;border-radius:2.5rem;overflow:hidden;background:linear-gradient(135deg,#fbc2eb 0%,#e0e7ff 100%);box-shadow:0 8px 32px 0 #7f53ac22,0 1.5px 8px 0 #fbc2eb22;backdrop-filter:blur(12px) saturate(120%);">
+    <div class="col-12 col-md-4 col-lg-3 d-flex flex-column" style="background:rgba(255,255,255,0.82);backdrop-filter:blur(16px) saturate(180%);box-shadow:0 4px 24px -8px #fbc2eb55;">
         <div class="p-3 border-bottom d-flex align-items-center">
             <h6 class="mb-0 flex-grow-1 text-uppercase small fw-bold tracking-wide">Chats</h6>
-            <button id="refreshList" class="btn btn-sm btn-outline-light" title="Refresh"><i class="fas fa-rotate"></i></button>
+            <button id="refreshList" class="btn btn-sm btn-outline-accent" title="Refresh" style="border-radius:1.5rem;font-size:1.1rem;padding:.4rem 1.1rem;"><i class="fas fa-rotate"></i> <span style="font-family:'Nunito',cursive;">Refresh</span></button>
         </div>
         <div class="p-2">
-            <input id="userSearch" type="text" class="form-control form-control-sm" placeholder="Search users...">
+            <input id="userSearch" type="text" class="form-control form-control-sm" placeholder="Search users..." style="border-radius:1.5rem;border:2px solid #fbc2eb;background:#fff0fa;color:#7f53ac;font-family:'Nunito',cursive;box-shadow:0 2px 8px -2px #fbc2eb33;">
         </div>
         <ul id="conversationList" class="list-unstyled mb-0 flex-grow-1" style="overflow-y:auto;">
             <!-- filled dynamically -->
         </ul>
-        <div class="p-2 border-top small text-muted">Showing <span id="convCount">0</span> users</div>
+        <div class="p-2 border-top d-flex justify-content-center">
+            <span class="user-count-pookie">Showing <span id="convCount">0</span> users</span>
+        </div>
+
+<style>
+    .user-count-pookie {
+        display: inline-block;
+        background: linear-gradient(90deg, #f8e1ff 0%, #e1f0ff 100%);
+        color: #a06cd5;
+        font-family: 'Nunito', cursive, sans-serif;
+        font-size: 1rem;
+        padding: 4px 16px;
+        border-radius: 18px;
+        box-shadow: 0 2px 8px 0 rgba(160, 108, 213, 0.08);
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        border: 1.5px solid #e0c3fc;
+        margin: 0 auto;
+        transition: background 0.2s, color 0.2s;
+    }
+</style>
     </div>
-    <div class="col-12 col-md-8 col-lg-9 d-flex flex-column" style="background:#121622;">
+    <div class="col-12 col-md-8 col-lg-9 d-flex flex-column" style="background:rgba(255,255,255,0.92);backdrop-filter:blur(16px) saturate(180%);box-shadow:0 4px 24px -8px #7f53ac55;">
         <div id="conversationHeader" class="p-3 border-bottom" style="min-height:62px;">
             <div class="d-flex align-items-center gap-3">
-                <div id="avatarCircle" class="rounded-circle d-flex justify-content-center align-items-center" style="width:42px;height:42px;background:#222a3d;font-weight:600;font-size:1rem;">?</div>
+                <div id="avatarCircle" class="rounded-circle d-flex justify-content-center align-items-center" style="width:48px;height:48px;background:linear-gradient(135deg,#fbc2eb 0%,#e0e7ff 100%);font-weight:700;font-size:1.2rem;color:#7f53ac;box-shadow:0 2px 8px -2px #fbc2eb55;">🐱</div>
                 <div class="flex-grow-1">
                     <div id="conversationTitle" class="fw-semibold">Select a user</div>
                     <div id="conversationMeta" class="cc-small"></div>
@@ -48,12 +109,47 @@
             </div>
             <div id="typingBanner" class="small text-info d-none mt-1" style="opacity:.85;">Typing…</div>
         </div>
-        <form id="messageForm" class="p-2 d-flex gap-2 align-items-end border-top" autocomplete="off" style="background:#161b29;">
+    <form id="messageForm" class="p-2 d-flex gap-2 align-items-end border-top" autocomplete="off" style="background:linear-gradient(120deg,#fbc2eb 0%,#e0e7ff 100%);border-radius:0 0 2rem 2rem;box-shadow:0 -2px 12px -4px #fbc2eb33;">
             <input type="hidden" id="receiverId" name="receiver_id" value="">
-            <textarea id="messageBody" name="body" class="form-control" rows="1" placeholder="Type a message..." disabled style="resize:none;max-height:160px;background:#121826;border:1px solid #283248;color:#fff;"></textarea>
-            <button id="sendBtn" class="btn btn-primary d-flex align-items-center justify-content-center" style="width:48px;height:48px;" type="submit" disabled>
+            <textarea id="messageBody" name="body" class="form-control" rows="1" placeholder="Type a message..." disabled style="resize:none;max-height:160px;background:#fff0fa;border:2px solid #fbc2eb;border-radius:1.5rem;color:#7f53ac;font-family:'Nunito',cursive;box-shadow:0 2px 8px -2px #fbc2eb33;"></textarea>
+            <button id="sendBtn" class="btn btn-accent send-btn-normal" type="submit" disabled>
                 <i class="fas fa-paper-plane"></i>
             </button>
+
+<style>
+    /* Fix bottom left chat area rounding */
+    #chat-app > .col-12.col-md-4.col-lg-3 {
+        border-bottom-left-radius: 2.5rem;
+        overflow: hidden;
+    }
+    /* Normal send button style */
+    .send-btn-normal {
+        background: linear-gradient(90deg, #a18cd1 0%, #fbc2eb 100%);
+        color: #fff;
+        border: none;
+        border-radius: 1.5rem;
+        font-size: 1.25rem;
+        font-family: 'Nunito', cursive, sans-serif;
+        font-weight: 700;
+        padding: 0.5rem 1.5rem;
+        box-shadow: 0 2px 8px 0 #fbc2eb44;
+        transition: background 0.18s, color 0.18s, box-shadow 0.18s;
+        outline: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+    }
+    .send-btn-normal:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+    .send-btn-normal:hover:not(:disabled) {
+        background: linear-gradient(90deg, #7f53ac 0%, #fbc2eb 100%);
+        color: #fff;
+        box-shadow: 0 4px 16px -4px #a18cd1aa;
+    }
+</style>
         </form>
     </div>
 </div>
@@ -139,13 +235,22 @@ function renderMessages(list, append=false){
         }
         if(m.type === 'message') {
             const wrap = document.createElement('div');
-            wrap.className = 'mb-2 d-flex ' + (m.is_me ? 'justify-content-end':'justify-content-start');
+            // For sent messages, use flex-column to stack bubble and seen mark
+            if(m.is_me) {
+                wrap.className = 'mb-2 d-flex flex-column align-items-end';
+            } else {
+                wrap.className = 'mb-2 d-flex justify-content-start';
+            }
             if(m.is_me) lastOutgoingId = Math.max(lastOutgoingId, m.id);
             const seenMark = (m.is_me && m.read_at) ? ' <span class="text-info seen-flag" data-mid="'+m.id+'">Seen</span>' : (m.read_at && !m.is_me ? ' ✓':'');
+            // Place delivered tick (✓) inside the bubble for received messages
+            let timeAndTick = m.time;
+            if (m.read_at && !m.is_me) timeAndTick += ' <span class="delivered-tick">✓</span>';
             wrap.innerHTML = `<div class=\"msg-bubble ${m.is_me?'me':'other'}\" style=\"max-width:72%;\">`+
                 `<div>${escapeHtml(m.body)}</div>`+
-                `<div class=\"small text-end opacity-75 mt-1\">${m.time}${seenMark}</div>`+
-                `</div>`;
+                `<div class=\"small text-end opacity-75 mt-1\">${timeAndTick}</div>`+
+                `</div>`+
+                (m.is_me && m.read_at ? seenMark : '');
             content.appendChild(wrap);
             if(m.id>lastMessageId) lastMessageId = m.id;
         }

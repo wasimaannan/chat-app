@@ -5,58 +5,53 @@
 @section('content')
 <div class="row justify-content-center">
     <div class="col-md-6">
-        <div class="card" style="background:#1c1c1c;">
-            <div class="card-body p-4">
-                <h4 class="mb-4"><i class="fas fa-cat"></i> Welcome back</h4>
-                
+        <div class="card shadow-lg border-0">
+            <div class="card-body p-5">
+                <h3 class="mb-4 text-center" style="color:#7f53ac;font-weight:800;letter-spacing:.5px;"><i class="fas fa-cat"></i> Welcome back</h3>
                 <form action="{{ route('login') }}" method="POST">
                     @csrf
-                    
-                    <div class="mb-3">
-                        <label for="email" class="form-label">
-                            <i class="fas fa-envelope"></i> Email Address
-                        </label>
+                    <div class="mb-4">
+                        <label for="email" class="form-label"><i class="fas fa-envelope"></i> Email</label>
                         <input 
                             type="email" 
-                            class="form-control encrypted-field @error('email') is-invalid @enderror" 
+                            class="form-control form-control-lg @error('email') is-invalid @enderror" 
                             id="email" 
                             name="email" 
                             value="{{ old('email') }}" 
                             required
-                            placeholder="Enter your email">
+                            placeholder="you@example.com">
                         @error('email')
                             <div class="invalid-feedback">{{ $message }}</div>
                         @enderror
                     </div>
-                    
-                    <div class="mb-3">
-                        <label for="password" class="form-label">
-                            <i class="fas fa-lock"></i> Password
-                        </label>
+                    <div class="mb-4">
+                        <label for="password" class="form-label"><i class="fas fa-lock"></i> Password</label>
                         <input 
                             type="password" 
-                            class="form-control @error('password') is-invalid @enderror" 
+                            class="form-control form-control-lg @error('password') is-invalid @enderror" 
                             id="password" 
                             name="password" 
                             required
-                            placeholder="Enter your password">
+                            placeholder="••••••••">
                         @error('password')
                             <div class="invalid-feedback">{{ $message }}</div>
                         @enderror
                     </div>
-                    
-                    <div class="d-grid gap-2">
-                        <button type="submit" class="btn btn-primary">
+                    <div class="d-flex justify-content-between align-items-center mb-4 tiny-hint">
+                        <span class="text-muted">Forgot password?</span>
+                        <a href="#" class="link-secondary">Reset</a>
+                    </div>
+                    <div class="d-grid gap-2 mb-3">
+                        <button type="submit" class="btn btn-gradient btn-lg">
                             <i class="fas fa-sign-in-alt"></i> Login
                         </button>
                     </div>
                 </form>
-                
-                <hr>
-                
-                <div class="text-center">
-                    <p class="mb-2">No account?</p>
-                    <a href="{{ route('register') }}" class="btn btn-outline-light btn-sm"><i class="fas fa-user-plus"></i> Register</a>
+                <div class="text-center mt-4">
+                    <span class="text-muted small">No account yet?</span>
+                    <a href="{{ route('register') }}" class="btn btn-outline-secondary btn-sm rounded-pill px-4 ms-2">
+                        <i class="fas fa-user-plus"></i> Register
+                    </a>
                 </div>
             </div>
         </div>

@@ -57,7 +57,7 @@ class EncryptionService
     }
 
     // -------- Hybrid per-user field encryption (RSA wrap + AES-256-GCM) --------
-    private const USER_FIELDS = ['name', 'email', 'phone', 'address', 'date_of_birth'];
+    private const USER_FIELDS = ['name', 'email', 'phone', 'address', 'date_of_birth']; // bio intentionally not encrypted
 
     public function encryptUserInfoHybrid(User $user, array $userInfo): array
     {

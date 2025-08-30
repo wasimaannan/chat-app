@@ -6,8 +6,8 @@
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h2 class="mb-0">Feed</h2>
     <div class="d-flex gap-2">
-        <a href="{{ route('chat.index') }}" class="btn btn-sm btn-primary"><i class="fas fa-comments"></i> Chat</a>
-        <a href="{{ route('posts.create') }}" class="btn btn-sm btn-outline-light"><i class="fas fa-plus"></i> New Post</a>
+        <a href="{{ route('chat.index') }}" class="btn btn-sm btn-gradient"><i class="fas fa-comments"></i> Chat</a>
+    <a href="{{ route('profile') }}" class="btn btn-sm btn-outline-purple"><i class="fas fa-user"></i> Profile</a>
     </div>
 </div>
 <div class="d-flex justify-content-between align-items-center mb-4">
@@ -15,7 +15,7 @@
         <i class="fas fa-list"></i> 
         All Posts
     </h2>
-    <a href="{{ route('posts.create') }}" class="btn btn-primary">
+    <a href="{{ route('posts.create') }}" class="btn btn-gradient">
         <i class="fas fa-plus"></i> Create New Post
     </a>
 </div>
@@ -56,7 +56,7 @@
                         {{-- Removed encryption status line --}}
                     </div>
                     <div class="card-footer">
-                        <a href="{{ route('posts.show', $post['id']) }}" class="btn btn-outline-primary btn-sm">
+                        <a href="{{ route('posts.show', $post['id']) }}" class="btn btn-outline-secondary btn-sm">
                             <i class="fas fa-eye"></i> Read More
                         </a>
                     </div>
@@ -69,7 +69,7 @@
         <i class="fas fa-file-alt fa-4x text-muted mb-3"></i>
         <h4 class="text-muted">No posts available</h4>
     <p class="text-muted">Be the first to share something!</p>
-        <a href="{{ route('posts.create') }}" class="btn btn-primary">
+        <a href="{{ route('posts.create') }}" class="btn btn-gradient">
             <i class="fas fa-plus"></i> Create First Post
         </a>
     </div>

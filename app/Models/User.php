@@ -20,10 +20,12 @@ class User extends Authenticatable
     protected $fillable = [
         'name',
         'email',
-    'email_hash',
+        'email_hash',
         'phone',
         'address',
         'date_of_birth',
+        'bio',
+    'profile_picture',
         'password_hash',
         'password_salt',
         'data_mac',
@@ -32,6 +34,31 @@ class User extends Authenticatable
         'wrapped_userinfo_key',
         'key_pair_id'
     ];
+
+
+    /**
+     * Get decrypted profile picture as base64 for display
+     */
+    public function getDecryptedProfilePictureBase64(): ?array
+    {
+        if (!$this->profile_picture) return null;
+        $encryptionService = app(\App\Services\EncryptionService::class);
+        try {
+            $binary = $encryptionService->decrypt($this->profile_picture, 'profile_picture');
+            // If you have a mime column, adjust here. Otherwise, default to jpeg.
+            $mime = 'image/jpeg';
+            return [
+                'base64' => base64_encode($binary),
+                'mime' => $mime
+            ];
+        } catch (\Exception $e) {
+            \Log::error('Profile picture decryption failed', [
+                'user_id' => $this->id,
+                'error' => $e->getMessage(),
+            ]);
+            return null;
+        }
+    }
 
     /**
      * The attributes that should be hidden for serialization.
@@ -87,26 +114,36 @@ class User extends Authenticatable
     {
         $encryptionService = app(EncryptionService::class);
         
-        return $encryptionService->decryptUserInfoHybrid($this, [
+        $decrypted = $encryptionService->decryptUserInfoHybrid($this, [
             'name' => $this->name,
             'email' => $this->email,
             'phone' => $this->phone,
             'address' => $this->address,
             'date_of_birth' => $this->date_of_birth,
         ]);
+        // Add bio (not encrypted)
+        $decrypted['bio'] = $this->bio;
+        return $decrypted;
     }
 
     /**
      * Set encrypted user data
      */
-    public function setEncryptedData(array $userData): void
+    public function setEncryptedData(array $userData, $profilePicEncrypted = null, $profilePicMime = null): void
     {
         $encryptionService = app(EncryptionService::class);
         $macService = app(MACService::class);
         $kms = app(KeyManagementService::class);
         if ($this->id) { $kms->ensureUserKeyPair($this); }
-        $encryptedData = $encryptionService->encryptUserInfoHybrid($this, $userData);
+        // Remove bio from encrypted fields
+        $userDataForEncryption = $userData;
+        unset($userDataForEncryption['bio']);
+        $encryptedData = $encryptionService->encryptUserInfoHybrid($this, $userDataForEncryption);
         $this->fill($encryptedData);
+        // Always set profile_picture directly after fill to avoid being overwritten
+        if ($profilePicEncrypted !== null) {
+            $this->profile_picture = $profilePicEncrypted;
+        }
         if (!empty($userData['email'])) { $this->email_hash = hash('sha256', strtolower(trim($userData['email']))); }
         $this->data_mac = $macService->generateUserDataMAC($encryptedData, $this->id ?? 0);
     }
