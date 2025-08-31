@@ -111,10 +111,52 @@
         </div>
     <form id="messageForm" class="p-2 d-flex gap-2 align-items-end border-top" autocomplete="off" style="background:linear-gradient(120deg,#fbc2eb 0%,#e0e7ff 100%);border-radius:0 0 2rem 2rem;box-shadow:0 -2px 12px -4px #fbc2eb33;">
             <input type="hidden" id="receiverId" name="receiver_id" value="">
+            <button type="button" id="addPicBtn" style="padding:6px 18px; border:1px solid #ccc; border-radius:4px; background:#f8f9fa; color:#333; font-size:15px; cursor:pointer;">Add Picture</button>
+            <input type="file" id="photoInput" name="image" accept="image/*" style="display:none;">
+            <span id="fileName" style="font-size:13px; color:#7f53ac; margin-left:4px;"></span>
+            <img id="imgPreview" src="" alt="" style="display:none; max-width:48px; max-height:48px; border-radius:6px; margin-left:6px;" />
             <textarea id="messageBody" name="body" class="form-control" rows="1" placeholder="Type a message..." disabled style="resize:none;max-height:160px;background:#fff0fa;border:2px solid #fbc2eb;border-radius:1.5rem;color:#7f53ac;font-family:'Nunito',cursive;box-shadow:0 2px 8px -2px #fbc2eb33;"></textarea>
             <button id="sendBtn" class="btn btn-accent send-btn-normal" type="submit" disabled>
                 <i class="fas fa-paper-plane"></i>
             </button>
+<script>
+const addPicBtn = document.getElementById('addPicBtn');
+const photoInput = document.getElementById('photoInput');
+const fileNameSpan = document.getElementById('fileName');
+const imgPreview = document.getElementById('imgPreview');
+const sendBtn = document.getElementById('sendBtn');
+const messageBody = document.getElementById('messageBody');
+
+addPicBtn.addEventListener('click', function() {
+    photoInput.click();
+});
+
+photoInput.addEventListener('change', function() {
+    if (photoInput.files && photoInput.files[0]) {
+        fileNameSpan.textContent = photoInput.files[0].name;
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            imgPreview.src = e.target.result;
+            imgPreview.style.display = 'inline-block';
+        };
+        reader.readAsDataURL(photoInput.files[0]);
+        sendBtn.disabled = false;
+    } else {
+        fileNameSpan.textContent = '';
+        imgPreview.src = '';
+        imgPreview.style.display = 'none';
+        if (!messageBody.value.trim()) sendBtn.disabled = true;
+    }
+});
+
+messageBody.addEventListener('input', function() {
+    if (messageBody.value.trim() || (photoInput.files && photoInput.files[0])) {
+        sendBtn.disabled = false;
+    } else {
+        sendBtn.disabled = true;
+    }
+});
+</script>
 
 <style>
     /* Fix bottom left chat area rounding */
@@ -301,21 +343,37 @@ async function sendMessage(e){
     if(!currentConversationId) return;
     const bodyEl = document.getElementById('messageBody');
     const text = bodyEl.value.trim();
-    if(!text) return;
+    const fileInput = document.getElementById('photoInput');
+    if(!text && (!fileInput.files || !fileInput.files[0])) return;
     bodyEl.disabled = true;
     try {
-        const sendRes = await fetchJSON('/chat/send', { method:'POST', body: new URLSearchParams({ conversation_id: currentConversationId, body: text }) });
-        // Optimistic append (sendRes.message already plaintext)
+        const formData = new FormData();
+        formData.append('conversation_id', currentConversationId);
+        formData.append('body', text);
+        if(fileInput.files && fileInput.files[0]) {
+            formData.append('image', fileInput.files[0]);
+        }
+        const res = await fetch('/chat/send', {
+            method: 'POST',
+            headers: { 'X-CSRF-TOKEN': csrfToken },
+            body: formData
+        });
+        if(!res.ok) throw new Error('Failed to send');
+        const sendRes = await res.json();
         if(sendRes && sendRes.message){
             lastOutgoingId = sendRes.message.id;
             renderMessages([{...sendRes.message, type:'message'}], true);
         }
-        // Fast path via data channel
         if(rtcReady && rtcChannel?.readyState==='open'){
             try { rtcChannel.send(JSON.stringify({type:'msg',body:text,ts:Date.now()})); } catch(_){ }
         }
-        bodyEl.value='';
-        loadConversationList();
+    bodyEl.value='';
+    fileInput.value = '';
+    fileNameSpan.textContent = '';
+    imgPreview.src = '';
+    imgPreview.style.display = 'none';
+    sendBtn.disabled = true;
+    loadConversationList();
     } catch(e){ console.error(e); }
     bodyEl.disabled = false; bodyEl.focus();
 }

@@ -13,8 +13,27 @@ class Message extends Model
     use HasFactory;
 
     protected $fillable = [
-        'conversation_id','sender_id','receiver_id','body','data_mac','read_at','wrapped_key','iv','tag'
+        'conversation_id','sender_id','receiver_id','body','data_mac','read_at','wrapped_key','iv','tag','image'
     ];
+    // Encrypt and set the image (base64 string or binary)
+    public function setEncryptedImage($imageContent): void
+    {
+        if (!$imageContent) return;
+        $enc = app(\App\Services\EncryptionService::class);
+        $this->image = $enc->encrypt($imageContent, 'message_image');
+    }
+
+    // Get decrypted image (base64 string)
+    public function getDecryptedImageBase64Attribute(): ?string
+    {
+        if (!$this->image) return null;
+        try {
+            $enc = app(\App\Services\EncryptionService::class);
+            return $enc->decrypt($this->image, 'message_image');
+        } catch (\Exception $e) {
+            return null;
+        }
+    }
 
     protected $casts = [
         'read_at' => 'datetime',

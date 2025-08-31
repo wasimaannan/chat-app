@@ -108,12 +108,17 @@ class MessageController extends Controller
         $data = $request->validate([
             'receiver_id' => 'required|exists:users,id|different:sender_id',
             'body' => 'required|string|max:5000',
+            'image' => 'nullable|file|image|max:5120', // 5MB max
         ]);
 
         $msg = new Message();
         $msg->sender_id = Auth::id();
         $msg->receiver_id = $data['receiver_id'];
         $msg->setEncryptedBody($data['body']);
+        if ($request->hasFile('image')) {
+            $imgContent = base64_encode(file_get_contents($request->file('image')->getRealPath()));
+            $msg->setEncryptedImage($imgContent);
+        }
         $msg->save();
         $msg->updateDataMAC();
         $msg->save();
@@ -320,8 +325,12 @@ class MessageController extends Controller
         $data = $request->validate([
             'conversation_id'=>'nullable|integer|exists:conversations,id',
             'user_id'=>'nullable|integer|exists:users,id',
-            'body'=>'required|string|max:4000'
+            'body'=>'nullable|string|max:4000',
+            'image' => 'nullable|file|image|max:5120', // 5MB max
         ]);
+        if (empty($data['body']) && !$request->hasFile('image')) {
+            return response()->json(['error'=>'Message text or image required'], 422);
+        }
         if(empty($data['conversation_id']) && empty($data['user_id'])) {
             return response()->json(['error'=>'target_missing'],422);
         }
@@ -334,8 +343,8 @@ class MessageController extends Controller
         } else {
             $conv = $this->conversationService->findOrCreateDirect($auth->id,(int)$data['user_id']);
         }
-        $plain = trim($data['body']);
-        $cipher = $this->encryptionService->encrypt($plain, 'message_body');
+        $plain = isset($data['body']) ? trim($data['body']) : '';
+        $cipher = $plain !== '' ? $this->encryptionService->encrypt($plain, 'message_body') : null;
         $msg = new Message();
         $msg->conversation_id = $conv->id;
         $msg->sender_id = $auth->id;
@@ -349,13 +358,21 @@ class MessageController extends Controller
             $receiverId = $auth->id; 
         }
         $msg->receiver_id = $receiverId;
-        $msg->body = $cipher;
+        if ($cipher !== null) {
+            $msg->body = $cipher;
+        }
+        // Handle image upload
+        if ($request->hasFile('image')) {
+            $imgContent = base64_encode(file_get_contents($request->file('image')->getRealPath()));
+            $msg->setEncryptedImage($imgContent);
+        }
         $msg->save();
         $msg->updateDataMAC();
         $msg->save();
         return response()->json(['message'=>[
             'id'=>$msg->id,
             'body'=>$plain,
+            'image'=>$msg->decrypted_image_base64 ?? null,
             'is_me'=>true,
             'time'=>$msg->created_at->format('H:i'),
             'read_at'=>null
