@@ -44,6 +44,14 @@ class Post extends Model
     }
 
     /**
+     * Relationship: post has many comments
+     */
+    public function comments()
+    {
+        return $this->hasMany(Comment::class);
+    }
+
+    /**
      * Get decrypted post data
      */
     public function getDecryptedData(): array
@@ -76,18 +84,29 @@ class Post extends Model
         if ($this->user) { $kms->ensureUserKeyPair($this->user); }
         $pub = $this->user ? $kms->getPublicKey($this->user) : null;
         if ($pub) {
-            $symKey = random_bytes(32); $iv = random_bytes(12);
-            $this->title = $title !== '' ? $this->encryptField($title, $symKey, 'post_title') : '';
-            $this->content = $this->encryptField($content, $symKey, 'post_content');
+            $symKey = random_bytes(32);
+            // Encrypt title and content, get packed values
+            $titlePacked = $title !== '' ? $this->encryptField($title, $symKey, 'post_title') : '';
+            $contentPacked = $this->encryptField($content, $symKey, 'post_content');
+            $this->title = $titlePacked;
+            $this->content = $contentPacked;
             openssl_public_encrypt($symKey, $wrapped, $pub, OPENSSL_PKCS1_OAEP_PADDING);
             $this->wrapped_key = base64_encode($wrapped);
-            $this->iv = ''; // per-field iv included in packed value; keep column for compatibility
-            $this->tag = '';
+            // Extract IV and tag from title field (or content if you prefer)
+            if ($titlePacked && substr_count($titlePacked, ':') === 2) {
+                [$ivB64, $tagB64, $ctB64] = explode(':', $titlePacked);
+                $this->iv = $ivB64;
+                $this->tag = $tagB64;
+            } else {
+                $this->iv = '';
+                $this->tag = '';
+            }
         } else {
             // Fallback legacy
             $enc = app(EncryptionService::class);
             $data = $enc->encryptPost($content, $title);
-            $this->title = $data['title']; $this->content = $data['content'];
+            $this->title = $data['title'];
+            $this->content = $data['content'];
         }
         if ($this->id) { $this->updateDataMAC(); }
     }
@@ -159,7 +178,7 @@ class Post extends Model
     /**
      * Scope for published posts
      */
-    public function scopePublished($q) { return $q->where('is_published', true); }
+    // public function scopePublished($q) { return $q->where('is_published', true); } // removed, all posts are public
     /**
      * Scope for user's posts
      */

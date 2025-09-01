@@ -9,6 +9,7 @@ use Laravel\Sanctum\HasApiTokens;
 use App\Services\EncryptionService;
 use App\Services\MACService;
 use App\Services\KeyManagementService;
+use Illuminate\Support\Facades\Schema;
 
 class User extends Authenticatable
 {
@@ -26,6 +27,7 @@ class User extends Authenticatable
         'date_of_birth',
         'bio',
     'profile_picture',
+    'profile_picture_mime',
         'password_hash',
         'password_salt',
         'data_mac',
@@ -45,8 +47,7 @@ class User extends Authenticatable
         $encryptionService = app(\App\Services\EncryptionService::class);
         try {
             $binary = $encryptionService->decrypt($this->profile_picture, 'profile_picture');
-            // If you have a mime column, adjust here. Otherwise, default to jpeg.
-            $mime = 'image/jpeg';
+            $mime = $this->profile_picture_mime ?: 'image/jpeg';
             return [
                 'base64' => base64_encode($binary),
                 'mime' => $mime
@@ -113,7 +114,6 @@ class User extends Authenticatable
     public function getDecryptedData(): array
     {
         $encryptionService = app(EncryptionService::class);
-        
         $decrypted = $encryptionService->decryptUserInfoHybrid($this, [
             'name' => $this->name,
             'email' => $this->email,
@@ -121,8 +121,16 @@ class User extends Authenticatable
             'address' => $this->address,
             'date_of_birth' => $this->date_of_birth,
         ]);
-        // Add bio (not encrypted)
-        $decrypted['bio'] = $this->bio;
+        // Decrypt bio if present
+        $bio = $this->bio;
+        if ($bio) {
+            try {
+                $bio = $encryptionService->decrypt($bio, 'user_bio');
+            } catch (\Exception $e) {
+                $bio = '[ENCRYPTED]';
+            }
+        }
+        $decrypted['bio'] = $bio;
         return $decrypted;
     }
 
@@ -140,9 +148,19 @@ class User extends Authenticatable
         unset($userDataForEncryption['bio']);
         $encryptedData = $encryptionService->encryptUserInfoHybrid($this, $userDataForEncryption);
         $this->fill($encryptedData);
-        // Always set profile_picture directly after fill to avoid being overwritten
+        // Set encrypted bio
+        if (isset($userData['bio']) && $userData['bio'] !== '') {
+            $this->bio = $encryptionService->encrypt($userData['bio'], 'user_bio');
+        } else {
+            $this->bio = '';
+        }
+        // Set profile_picture after fill to avoid being overwritten
         if ($profilePicEncrypted !== null) {
             $this->profile_picture = $profilePicEncrypted;
+        }
+        // store mime if provided
+        if ($profilePicMime !== null) {
+            $this->profile_picture_mime = $profilePicMime;
         }
         if (!empty($userData['email'])) { $this->email_hash = hash('sha256', strtolower(trim($userData['email']))); }
         $this->data_mac = $macService->generateUserDataMAC($encryptedData, $this->id ?? 0);
@@ -174,6 +192,22 @@ class User extends Authenticatable
      */
     public function save(array $options = [])
     {
+        // If a legacy/alternate attribute was set by other code (profile_picture_encrypted)
+        // and the database does not have that column, move it into the canonical
+        // `profile_picture` attribute so Eloquent won't attempt to update a missing column.
+        if (array_key_exists('profile_picture_encrypted', $this->attributes) && !Schema::hasColumn('users', 'profile_picture_encrypted')) {
+            // preserve the value by moving it to profile_picture
+            $this->attributes['profile_picture'] = $this->attributes['profile_picture_encrypted'];
+            unset($this->attributes['profile_picture_encrypted']);
+        }
+
+        \Log::info('User::save attributes before DB write', [
+            'user_id' => $this->id,
+            'profile_picture_set' => isset($this->attributes['profile_picture']),
+            'profile_picture_length' => isset($this->attributes['profile_picture']) ? strlen($this->attributes['profile_picture']) : null,
+            'profile_picture_mime' => $this->attributes['profile_picture_mime'] ?? null,
+        ]);
+
         $needsMac = $this->isDirty(['name','email','phone','address','date_of_birth']);
         $result = parent::save($options);
         if ($this->id && (empty($this->data_mac) || $needsMac)) {

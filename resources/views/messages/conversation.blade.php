@@ -19,7 +19,7 @@
 <form method="POST" action="{{ route('messages.store') }}" enctype="multipart/form-data" class="p-2 d-flex gap-2 align-items-end border-top" autocomplete="off" style="background:linear-gradient(120deg,#fbc2eb 0%,#e0c3fc 100%);border-radius:0 0 2rem 2rem;box-shadow:0 -2px 12px -4px #fbc2eb33;">
     @csrf
     <input type="hidden" name="receiver_id" value="{{ $other->id }}">
-    <button type="button" id="addPicBtn" style="padding:6px 18px; border:1px solid #ccc; border-radius:4px; background:#f8f9fa; color:#333; font-size:15px; cursor:pointer; order:-1;">Add Picture</button>
+
     <input type="file" id="photoInput" name="image" accept="image/*" style="display:none;">
     <textarea id="messageBody" name="body" class="form-control" rows="1" placeholder="Type a message..." style="resize:none;max-height:160px;background:#fff0fa;border:2px solid #fbc2eb;border-radius:1.5rem;color:#7f53ac;font-family:'Nunito',cursive;box-shadow:0 2px 8px -2px #fbc2eb33;"></textarea>
     <button type="submit" class="d-flex align-items-center justify-content-center" style="background:linear-gradient(135deg,#8ec5fc,#e0c3fc); border:none; border-radius:50%; width:38px; height:38px; box-shadow:0 2px 6px rgba(0,0,0,0.08);">

@@ -36,6 +36,8 @@ Route::middleware(['secure.auth'])->group(function () {
     // Profile management
     Route::get('/profile', [AuthController::class, 'profile'])->name('profile');
     Route::post('/profile', [AuthController::class, 'updateProfile']);
+    Route::post('/change-password', [AuthController::class, 'changePassword'])->name('password.change');
+
     
     // Posts management
     Route::get('/posts', [PostController::class, 'index'])->name('posts.index');
@@ -45,6 +47,10 @@ Route::middleware(['secure.auth'])->group(function () {
     Route::get('/posts/{id}/edit', [PostController::class, 'edit'])->name('posts.edit');
     Route::put('/posts/{id}', [PostController::class, 'update'])->name('posts.update');
     Route::delete('/posts/{id}', [PostController::class, 'destroy'])->name('posts.destroy');
+
+    // Comments
+    Route::post('/posts/{post}/comments', [\App\Http\Controllers\CommentController::class, 'store'])->name('comments.store');
+
     Route::get('/my-posts', [PostController::class, 'myPosts'])->name('posts.my-posts');
 
     // Messaging

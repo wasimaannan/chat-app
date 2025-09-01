@@ -18,6 +18,46 @@ class AuthController extends Controller
 {
     private $passwordService;
     private $encryptionService;
+    // ...existing code...
+    /**
+     * Change user password (separate from profile update)
+     */
+    public function changePassword(Request $request)
+    {
+        $user = $this->getCurrentUser();
+        if (!$user) {
+            return redirect()->route('login');
+        }
+
+        $validator = Validator::make($request->all(), [
+            'current_password' => 'required|string',
+            'new_password' => 'required|string|min:8|confirmed',
+        ], [
+            'new_password.confirmed' => 'The new password confirmation does not match.',
+        ]);
+
+        if ($validator->fails()) {
+            return back()->withErrors($validator)->withInput();
+        }
+
+        // Check current password
+        $currentPassword = $request->input('current_password');
+        $passwordService = $this->passwordService;
+        $isValid = $passwordService->verifyPassword($currentPassword, $user->password_hash, $user->password_salt);
+        if (!$isValid) {
+            return back()->withErrors(['password_error' => 'Current password is incorrect.'])->withInput();
+        }
+
+        // Set new password
+        $newPassword = $request->input('new_password');
+        $passwordData = $passwordService->hashPassword($newPassword);
+        $user->password_hash = $passwordData['hash'];
+        $user->password_salt = $passwordData['salt'];
+        $user->save();
+
+        return back()->with('password_success', 'Password changed successfully!');
+    }
+    // ...existing code...
     private $credentialService;
     private $macService;
     
@@ -57,6 +97,7 @@ class AuthController extends Controller
         // Ensure SQLite database file exists (common cause of silent registration failure)
         $this->ensureSqliteDatabase();
 
+        \Log::info('REG: Starting registration', ['request' => $request->all()]);
         // Validate input
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
@@ -65,42 +106,41 @@ class AuthController extends Controller
             'address' => 'nullable|string|max:500',
             'date_of_birth' => ['nullable','regex:/^\d{4}-\d{2}-\d{2}$/'],
             'password' => 'required|string|min:8|confirmed',
+            'profile_picture' => 'nullable|file|image|mimes:jpeg,png|max:2048',
         ]);
-        
+        \Log::info('REG: After validation', ['fails' => $validator->fails(), 'errors' => $validator->errors()]);
         if ($validator->fails()) {
             return back()->withErrors($validator)->withInput();
         }
         
         try {
+            \Log::info('REG: Before credential check');
             // Check credential strength
             $credentialCheck = $this->credentialService->validateCredentialStrength(
                 $request->email,
                 $request->password
             );
-            
+            \Log::info('REG: After credential check', ['result' => $credentialCheck]);
             if (!$credentialCheck['valid']) {
                 return back()->withErrors($credentialCheck['errors'])->withInput();
             }
-            
-            // Check if email already exists (need to decrypt and compare)
+            \Log::info('REG: Before email exists check');
             if ($this->isEmailExists($request->email)) {
+                \Log::info('REG: Email already exists', ['email' => $request->email]);
                 return back()->withErrors(['email' => 'Email already registered'])->withInput();
             }
-            
-            // Hash password with salt
+            \Log::info('REG: Before password hash');
             $passwordData = $this->passwordService->hashPassword($request->password);
-            
-            // Normalize date_of_birth (HTML input might be d/m/Y in some browsers if locale set)
+            \Log::info('REG: After password hash');
             $dobInput = $request->date_of_birth;
             if (!empty($dobInput) && preg_match('#^\d{2}/\d{2}/\d{4}$#', $dobInput)) {
-                // Convert dd/mm/YYYY -> YYYY-mm-dd
                 [$d,$m,$y] = explode('/', $dobInput);
                 $dobInput = "$y-$m-$d";
             }
-
+            \Log::info('REG: Before DB transaction');
             DB::beginTransaction();
             try {
-                // Create user with encrypted data
+                \Log::info('REG: In DB transaction');
                 $userData = [
                     'name' => $request->name,
                     'email' => $request->email,
@@ -108,11 +148,18 @@ class AuthController extends Controller
                     'address' => $request->address,
                     'date_of_birth' => $dobInput,
                 ];
-                
-                // Encrypt user data
+                \Log::info('REG: Before encrypt user info');
                 $encryptedData = $this->encryptionService->encryptUserInfo($userData);
-                
-                // Create user (ensure email_hash populated via deterministic hash)
+                \Log::info('REG: After encrypt user info');
+                $newProfilePicEncrypted = null;
+                if ($request->hasFile('profile_picture') && $request->file('profile_picture')->isValid()) {
+                    \Log::info('REG: Handling profile picture upload');
+                    $imageFile = $request->file('profile_picture');
+                    $image = file_get_contents($imageFile->getRealPath());
+                    $encryptionService = app(\App\Services\EncryptionService::class);
+                    $newProfilePicEncrypted = $encryptionService->encrypt($image, 'profile_picture');
+                    \Log::info('REG: After profile picture encrypt');
+                }
                 $user = new User();
                 $user->fill($encryptedData);
                 if (!empty($request->email)) {
@@ -121,27 +168,37 @@ class AuthController extends Controller
                 $user->password_hash = $passwordData['hash'];
                 $user->password_salt = $passwordData['salt'];
                 $user->is_active = true;
+                if ($newProfilePicEncrypted !== null) {
+                    $user->profile_picture = $newProfilePicEncrypted;
+                }
+                \Log::info('REG: Before user save');
                 $user->save();
-
+                \Log::info('REG: After user save', ['user_id' => $user->id]);
                 DB::commit();
+                \Log::info('REG: After DB commit');
             } catch (\Throwable $inner) {
                 DB::rollBack();
-                \Log::error('Registration inner failure: '.$inner->getMessage(), [
-                    'trace_top' => collect(explode("\n", $inner->getTraceAsString()))->take(5)->implode('|'),
+                \Log::error('Registration inner failure: ' . $inner->getMessage(), [
+                    'class' => get_class($inner),
+                    'trace' => $inner->getTraceAsString(),
+                    'file' => $inner->getFile(),
+                    'line' => $inner->getLine(),
+                    'request' => $request->all(),
                 ]);
                 throw $inner; // rethrow to outer catch
             }
-            
-            // Generate session token
             $sessionToken = $this->credentialService->generateSessionToken($user);
-            
-            // Set session
             session(['auth_token' => $sessionToken, 'user_id' => $user->id]);
-            
+            \Log::info('REG: Registration successful', ['user_id' => $user->id]);
             return redirect()->route('posts.index')->with('success', 'Registration successful!');
-            
         } catch (\Exception $e) {
-            \Log::error('Registration failed: ' . $e->getMessage(), ['class' => get_class($e)]);
+            \Log::error('Registration failed: ' . $e->getMessage(), [
+                'class' => get_class($e),
+                'trace' => $e->getTraceAsString(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'request' => $request->all(),
+            ]);
             return back()->withErrors(['error' => 'Registration failed. Please try again.'])->withInput();
         }
     }
@@ -231,6 +288,8 @@ class AuthController extends Controller
         if (!$user) {
             return redirect()->route('login');
         }
+    // Reload user from DB to avoid working on a possibly stale instance
+    $user = \App\Models\User::find($user->id);
         
         // Validate input
         $validator = Validator::make($request->all(), [
@@ -254,10 +313,11 @@ class AuthController extends Controller
                 'request_files' => $request->allFiles(),
                 'request_data' => $request->all(),
             ]);
+
             // Update user data with encryption
             $userData = [
                 'name' => $request->name,
-                'email' => $user->getDecryptedData()['email'], // Keep existing email
+                'email' => $user->getDecryptedData()['email'] ?? null, // Keep existing email
                 'phone' => $request->phone,
                 'address' => $request->address,
                 'date_of_birth' => $request->date_of_birth,
@@ -297,24 +357,28 @@ class AuthController extends Controller
                 ]);
             }
 
-            $user->setEncryptedData($userData, $newProfilePicEncrypted, $newProfilePicMime);
-            // Save bio as a separate column (not encrypted)
-            $user->bio = $request->bio;
-            // Ensure profile_picture is set directly before save
-            if ($newProfilePicEncrypted !== null) {
-                $user->profile_picture = $newProfilePicEncrypted;
-            }
-            Log::info('Profile update: saving user', [
-                'user_id' => $user->id,
-                'profile_picture_set' => isset($user->profile_picture),
-                'profile_picture_length' => isset($user->profile_picture) ? strlen($user->profile_picture) : null,
-            ]);
-            $user->save();
+            // Use DB transaction to ensure atomic update
+            DB::beginTransaction();
+            try {
+                // Apply encrypted data and save
+                $user->setEncryptedData($userData, $newProfilePicEncrypted, $newProfilePicMime);
+                $saved = $user->save();
 
-            Log::info('Profile update: after save', [
-                'user_id' => $user->id,
-                'profile_picture' => $user->profile_picture,
-            ]);
+                Log::info('Profile update: after save attempt', [
+                    'user_id' => $user->id,
+                    'saved' => $saved,
+                    'profile_picture_first_100' => $user->profile_picture ? substr($user->profile_picture,0,100) : null,
+                    'profile_picture_mime' => $user->profile_picture_mime ?? null,
+                ]);
+
+                DB::commit();
+            } catch (\Throwable $inner) {
+                DB::rollBack();
+                Log::error('Profile update transaction failed: ' . $inner->getMessage(), [
+                    'trace' => $inner->getTraceAsString(),
+                ]);
+                throw $inner;
+            }
 
             return back()->with('success', 'Profile updated successfully!');
 

@@ -3,12 +3,11 @@
 @section('title','chatty_cat')
 
 @section('content')
-</style>
 <style>
-/* Pookie conversation list selected user */
 .conversation-item.bg-secondary {
     background: linear-gradient(90deg, #fbc2eb 0%, #e0e7ff 100%) !important;
     color: #7f53ac !important;
+            const seenMark = (m.is_me && m.read_at) ? ' <span class="text-info seen-flag" data-mid="'+m.id+'">Seen</span>' : '';
     border-radius: 1.2rem;
     font-weight: 700;
     box-shadow: 0 2px 8px -2px #fbc2eb55;
@@ -21,34 +20,29 @@
 .msg-bubble {
     padding:.7rem 1.1rem;
     border-radius:2rem 2rem 2rem 0.7rem;
-    background:linear-gradient(120deg,#fbc2eb 0%,#e0e7ff 100%);
-    color:#7f53ac;
+    background:linear-gradient(120deg, rgba(var(--cc-softA-rgb),0.96) 0%, rgba(var(--cc-softA-rgb),0.82) 100%);
+    color:#7f53ac; /* unified readable text */
     font-size:1.05rem;
     font-family:'Nunito',cursive,sans-serif;
     line-height:1.5;
     position:relative;
     word-break:break-word;
-    box-shadow:0 4px 18px -8px #fbc2eb55,0 1.5px 8px 0 #7f53ac11;
+    box-shadow:0 4px 18px -8px rgba(var(--cc-softA-rgb),0.45),0 1.5px 8px 0 #7f53ac11;
     transition:background .25s, transform .15s;
-    border:2px solid #fbc2eb55;
+    border:2px solid rgba(var(--cc-softA-rgb),0.5);
 }
 .msg-bubble.other {
-    background:linear-gradient(120deg,#e0e7ff 0%,#fbc2eb 100%);
-    border:2px solid #7f53ac22;
-    color:#5e3a8c;
+    background: inherit; /* same as base */
+    border:2px solid rgba(var(--cc-softA-rgb),0.5);
+    color:#7f53ac;
 }
 .msg-bubble.me {
-    background:linear-gradient(120deg,#7f53ac 0%,#fbc2eb 100%);
-    color:#fff;
-    box-shadow:0 6px 20px -8px #7f53ac55;
-    border:2px solid #7f53ac55;
+    background: inherit; /* same as base */
+    color:#7f53ac;
+    box-shadow:0 6px 20px -8px rgba(var(--cc-softA-rgb),0.55);
+    border:2px solid rgba(var(--cc-softA-rgb),0.5);
 }
-.msg-bubble.me .small {
-    color:rgba(255,255,255,.85)!important;
-}
-.msg-bubble.other .small {
-    color:#7f53ac!important;
-}
+.msg-bubble .small { color:#7f53ac!important; }
 .msg-bubble:hover {
     transform:translateY(-3px) scale(1.03) rotate(-1deg);
     box-shadow:0 8px 24px -8px #fbc2eb88;
@@ -57,8 +51,7 @@
 /* Removed cat paw from chat bubbles */
 @media (prefers-reduced-motion:reduce){ .msg-bubble:hover{transform:none;} }
 </style>
-</style>
-<div id="chat-app" class="row g-0" style="min-height:72vh;border-radius:2.5rem;overflow:hidden;background:linear-gradient(135deg,#fbc2eb 0%,#e0e7ff 100%);box-shadow:0 8px 32px 0 #7f53ac22,0 1.5px 8px 0 #fbc2eb22;backdrop-filter:blur(12px) saturate(120%);">
+<div id="chat-app" class="row g-0" style="min-height:72vh;border-radius:2.5rem;overflow:hidden;background:linear-gradient(135deg, rgba(var(--cc-softA-rgb),1) 0%, rgba(var(--cc-softB-rgb),1) 100%);box-shadow:0 8px 32px 0 #7f53ac22,0 1.5px 8px 0 #fbc2eb22;backdrop-filter:blur(12px) saturate(120%);">
     <div class="col-12 col-md-4 col-lg-3 d-flex flex-column" style="background:rgba(255,255,255,0.82);backdrop-filter:blur(16px) saturate(180%);box-shadow:0 4px 24px -8px #fbc2eb55;">
         <div class="p-3 border-bottom d-flex align-items-center">
             <h6 class="mb-0 flex-grow-1 text-uppercase small fw-bold tracking-wide">Chats</h6>
@@ -103,19 +96,24 @@
                 <span id="unreadBadge" class="badge bg-danger d-none"></span>
             </div>
         </div>
-        <div id="messagesPane" class="flex-grow-1 px-3 py-2" style="overflow-y:auto;">
+    <div id="messagesPane" class="flex-grow-1 px-3 py-2" style="overflow-y:auto; max-height: 60vh; min-height: 300px; background: transparent;">
             <div id="messagesContent">
                 <div class="text-muted small py-5 text-center">No conversation selected. Pick a user on the left.</div>
             </div>
             <div id="typingBanner" class="small text-info d-none mt-1" style="opacity:.85;">Typing…</div>
         </div>
-    <form id="messageForm" class="p-2 d-flex gap-2 align-items-end border-top" autocomplete="off" style="background:linear-gradient(120deg,#fbc2eb 0%,#e0e7ff 100%);border-radius:0 0 2rem 2rem;box-shadow:0 -2px 12px -4px #fbc2eb33;">
+    <form id="messageForm" class="p-2 d-flex gap-2 align-items-end border-top" autocomplete="off" style="background:linear-gradient(120deg, rgba(var(--cc-softA-rgb),1) 0%, rgba(var(--cc-softB-rgb),1) 100%);border-radius:0 0 2rem 2rem;box-shadow:0 -2px 12px -4px #fbc2eb33;">
             <input type="hidden" id="receiverId" name="receiver_id" value="">
-            <button type="button" id="addPicBtn" style="padding:6px 18px; border:1px solid #ccc; border-radius:4px; background:#f8f9fa; color:#333; font-size:15px; cursor:pointer;">Add Picture</button>
+
             <input type="file" id="photoInput" name="image" accept="image/*" style="display:none;">
             <span id="fileName" style="font-size:13px; color:#7f53ac; margin-left:4px;"></span>
             <img id="imgPreview" src="" alt="" style="display:none; max-width:48px; max-height:48px; border-radius:6px; margin-left:6px;" />
             <textarea id="messageBody" name="body" class="form-control" rows="1" placeholder="Type a message..." disabled style="resize:none;max-height:160px;background:#fff0fa;border:2px solid #fbc2eb;border-radius:1.5rem;color:#7f53ac;font-family:'Nunito',cursive;box-shadow:0 2px 8px -2px #fbc2eb33;"></textarea>
+            <input type="file" id="chatFileInput" name="file" style="display:none;" accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt">
+            <button id="attachBtn" type="button" class="btn btn-light" style="border-radius:50%;width:44px;height:44px;display:flex;align-items:center;justify-content:center;">
+                <i class="fas fa-paperclip" style="font-size:1.3rem;"></i>
+            </button>
+            <span id="fileNameDisplay" class="small text-muted" style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:none;"></span>
             <button id="sendBtn" class="btn btn-accent send-btn-normal" type="submit" disabled>
                 <i class="fas fa-paper-plane"></i>
             </button>
@@ -199,6 +197,30 @@ messageBody.addEventListener('input', function() {
 
 @section('scripts')
 <script>
+// File attachment logic
+const chatFileInput = document.getElementById('chatFileInput');
+const attachBtn = document.getElementById('attachBtn');
+const fileNameDisplay = document.getElementById('fileNameDisplay');
+attachBtn.addEventListener('click', () => chatFileInput.click());
+chatFileInput.addEventListener('change', function() {
+    if (chatFileInput.files.length > 0) {
+        fileNameDisplay.textContent = chatFileInput.files[0].name;
+        fileNameDisplay.style.display = 'inline-block';
+        document.getElementById('sendBtn').disabled = false;
+    } else {
+        fileNameDisplay.textContent = '';
+        fileNameDisplay.style.display = 'none';
+        // Only enable send if message body is not empty
+        document.getElementById('sendBtn').disabled = document.getElementById('messageBody').value.trim() === '';
+    }
+});
+// When send is clicked, if file is attached, send file; else send text
+document.getElementById('messageForm').addEventListener('submit', function(e) {
+    const fileAttached = chatFileInput.files.length > 0;
+    if (fileAttached) {
+        document.getElementById('messageBody').value = '';
+    }
+});
 // Basic polling chat client + experimental WebRTC data channel signaling (poll-based)
 const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
 let currentPartnerUserId = null; // selected user id
@@ -288,11 +310,37 @@ function renderMessages(list, append=false){
             // Place delivered tick (✓) inside the bubble for received messages
             let timeAndTick = m.time;
             if (m.read_at && !m.is_me) timeAndTick += ' <span class="delivered-tick">✓</span>';
-            wrap.innerHTML = `<div class=\"msg-bubble ${m.is_me?'me':'other'}\" style=\"max-width:72%;\">`+
-                `<div>${escapeHtml(m.body)}</div>`+
+
+            // Custom rendering for file/image messages
+            let bodyHtml = '';
+            const fileRegex = /^\[file\] ([^\n]+)\n([^\n]+)$/i;
+            const match = m.body.match(fileRegex);
+            if (match) {
+                const originalName = match[1];
+                const savedName = match[2];
+                const fileUrl = `/chat_files/${savedName}`;
+                const isImage = /\.(jpg|jpeg|png|gif|bmp|webp)$/i.test(originalName);
+                // Prefer inline base64 if available from server (m.file_blob). Fallback to static file URL.
+                const hasBlob = m.file_blob && typeof m.file_blob === 'string' && m.file_blob.length > 0;
+                const dataUrl = hasBlob ? `data:${m.file_mime || 'application/octet-stream'};base64,${m.file_blob}` : null;
+                const downloadHref = hasBlob ? dataUrl : fileUrl;
+                const downloadIcon = `<a href="${downloadHref}" download="${escapeHtml(originalName)}" title="Download" style="position:absolute;top:10px;right:14px;z-index:2;color:#7f53ac;background:#fff0fa;border-radius:50%;padding:6px;box-shadow:0 2px 8px #fbc2eb33;transition:background 0.18s;" onmouseover="this.style.background='#fbc2eb';" onmouseout="this.style.background='#fff0fa';"><i class='fas fa-download'></i></a>`;
+                if (isImage) {
+                    const imgSrc = hasBlob ? dataUrl : fileUrl;
+                    bodyHtml = `<div style="position:relative;display:inline-block;">${downloadIcon}<img src="${imgSrc}" alt="${escapeHtml(originalName)}" style="max-width:180px;max-height:180px;border-radius:1rem;box-shadow:0 2px 8px #0002;margin-bottom:6px;display:block;"></div>`;
+                } else {
+                    bodyHtml = `<div style="position:relative;display:inline-block;min-width:120px;">${downloadIcon}<div style="padding:18px 8px 8px 8px;"><i class='fas fa-file-alt' style="font-size:1.5em;color:#7f53ac;"></i><br><span style="font-size:0.97em;color:#7f53ac;word-break:break-all;">${escapeHtml(originalName)}</span></div></div>`;
+                }
+            } else {
+                bodyHtml = `<div>${escapeHtml(m.body)}</div>`;
+            }
+
+            // Bubble layout only, no reactions
+            let bubble = `<div class=\"msg-bubble ${m.is_me?'me':'other'}\">`+
+                `${bodyHtml}`+
                 `<div class=\"small text-end opacity-75 mt-1\">${timeAndTick}</div>`+
-                `</div>`+
-                (m.is_me && m.read_at ? seenMark : '');
+            `</div>`;
+            wrap.innerHTML = bubble + (m.is_me && m.read_at ? seenMark : '');
             content.appendChild(wrap);
             if(m.id>lastMessageId) lastMessageId = m.id;
         }
@@ -342,40 +390,41 @@ async function sendMessage(e){
     e.preventDefault();
     if(!currentConversationId) return;
     const bodyEl = document.getElementById('messageBody');
+    const fileInput = document.getElementById('chatFileInput');
+    const file = fileInput.files[0];
     const text = bodyEl.value.trim();
-    const fileInput = document.getElementById('photoInput');
-    if(!text && (!fileInput.files || !fileInput.files[0])) return;
+    if(!text && !file) return;
     bodyEl.disabled = true;
-    try {
-        const formData = new FormData();
-        formData.append('conversation_id', currentConversationId);
+    fileInput.disabled = true;
+    const formData = new FormData();
+    formData.append('conversation_id', currentConversationId);
+    if (file) {
+        formData.append('file', file);
+    }
+    if (text && !file) {
         formData.append('body', text);
-        if(fileInput.files && fileInput.files[0]) {
-            formData.append('image', fileInput.files[0]);
-        }
+    }
+    try {
         const res = await fetch('/chat/send', {
             method: 'POST',
             headers: { 'X-CSRF-TOKEN': csrfToken },
             body: formData
         });
-        if(!res.ok) throw new Error('Failed to send');
         const sendRes = await res.json();
         if(sendRes && sendRes.message){
             lastOutgoingId = sendRes.message.id;
             renderMessages([{...sendRes.message, type:'message'}], true);
         }
         if(rtcReady && rtcChannel?.readyState==='open'){
-            try { rtcChannel.send(JSON.stringify({type:'msg',body:text,ts:Date.now()})); } catch(_){ }
+            try { rtcChannel.send(JSON.stringify({type:'msg',body:(file ? '[file]' : text),ts:Date.now()})); } catch(_){ }
         }
-    bodyEl.value='';
-    fileInput.value = '';
-    fileNameSpan.textContent = '';
-    imgPreview.src = '';
-    imgPreview.style.display = 'none';
-    sendBtn.disabled = true;
-    loadConversationList();
+        bodyEl.value='';
+        fileInput.value = '';
+        document.getElementById('fileNameDisplay').textContent = '';
+        document.getElementById('fileNameDisplay').style.display = 'none';
+        loadConversationList();
     } catch(e){ console.error(e); }
-    bodyEl.disabled = false; bodyEl.focus();
+    bodyEl.disabled = false; fileInput.disabled = false; bodyEl.focus();
 }
 
 function startPolling(){

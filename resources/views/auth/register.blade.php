@@ -8,7 +8,21 @@
         <div class="card shadow-lg border-0">
             <div class="card-body p-5">
                 <h3 class="mb-4 text-center" style="color:#7f53ac;font-weight:800;letter-spacing:.5px;"><i class="fas fa-user-plus"></i> Create your account</h3>
-                <form action="{{ route('register') }}" method="POST" id="registerForm">
+                <form action="{{ route('register') }}" method="POST" id="registerForm" enctype="multipart/form-data">
+                    @if($errors->any())
+                        <div class="alert alert-danger">
+                            <ul class="mb-0">
+                                @foreach($errors->all() as $error)
+                                    <li>{{ $error }}</li>
+                                @endforeach
+                            </ul>
+                        </div>
+                    @endif
+                    <div class="mb-4">
+                        <label for="profile_picture" class="form-label"><i class="fas fa-image"></i> Profile Picture</label>
+                        <input type="file" class="form-control form-control-lg @error('profile_picture') is-invalid @enderror" id="profile_picture" name="profile_picture" accept="image/*">
+                        @error('profile_picture')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    </div>
                     @csrf
                     <div class="row">
                         <div class="col-md-6 mb-4">

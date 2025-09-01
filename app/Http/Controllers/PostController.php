@@ -37,8 +37,8 @@ class PostController extends Controller
         }
         
         try {
-            // Get all published posts
-            $posts = Post::published()->with('user')->latest()->paginate(10);
+            // Get all posts (all are public now)
+            $posts = Post::with(['user', 'comments'])->withCount('comments')->latest()->paginate(10);
             
             // Decrypt posts for display
             $decryptedPosts = [];
@@ -59,7 +59,7 @@ class PostController extends Controller
                     'content' => $decryptedData['content'],
                     'author' => $decryptedUserData['name'],
                     'created_at' => $post->created_at,
-                    'is_published' => $post->is_published
+                    'comments_count' => $post->comments_count,
                 ];
             }
             
@@ -98,7 +98,6 @@ class PostController extends Controller
         $validator = Validator::make($request->all(), [
             'title' => 'required|string|max:255',
             'content' => 'required|string',
-            'is_published' => 'boolean'
         ]);
         
         if ($validator->fails()) {
@@ -109,12 +108,8 @@ class PostController extends Controller
             // Create new post
             $post = new Post();
             $post->user_id = $user->id;
-            $post->is_published = $request->has('is_published');
-            
-            if ($post->is_published) {
-                $post->published_at = now();
-            }
-            
+            $post->is_published = true;
+            $post->published_at = now();
             // Encrypt and set post data
             $post->setEncryptedData($request->title, $request->content);
             $post->save();
@@ -158,11 +153,10 @@ class PostController extends Controller
                 'author' => $decryptedUserData['name'],
                 'created_at' => $post->created_at,
                 'updated_at' => $post->updated_at,
-                'is_published' => $post->is_published,
                 'can_edit' => $post->user_id === $user->id
             ];
-            
-            return view('posts.show', compact('decryptedPost'));
+            $comments = $post->comments()->with('user')->latest()->get();
+            return view('posts.show', compact('decryptedPost', 'comments'));
             
         } catch (\Exception $e) {
             \Log::error('Failed to load post: ' . $e->getMessage());

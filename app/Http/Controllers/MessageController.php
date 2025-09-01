@@ -171,10 +171,12 @@ class MessageController extends Controller
                 $decrypted = $encSvc->decryptUserInfoHybrid($u, ['name'=>$u->name,'email'=>$u->email]);
                 $name = $decrypted['name'] ?? null;
                 if ($q !== '') { $email = $decrypted['email'] ?? null; }
+                \Log::debug('User decryption', ['user_id'=>$u->id, 'decrypted_name'=>$name, 'decrypted_email'=>$email]);
             } catch (\Throwable $e) {
                 // Legacy fallback (older records / partial data)
                 try { $name = $encSvc->decrypt($u->name, 'user_info_name'); } catch (\Throwable $e2) { $name = null; }
                 if ($q !== '') { try { $email = $encSvc->decrypt($u->email, 'user_info_email'); } catch (\Throwable $e3) { $email = null; } }
+                \Log::error('User decryption failed', ['user_id'=>$u->id, 'error'=>$e->getMessage()]);
             }
             if ($q !== '' && !str_contains(strtolower(($name ?? '').($email ?? '')), strtolower($q))) {
                 continue;
@@ -243,6 +245,16 @@ class MessageController extends Controller
         foreach ($messages as $m) {
             // 'body' stores the ciphertext for messages (no body_encrypted column)
             try { $body = $enc->decrypt($m->body, 'message_body'); } catch (\Exception $e) { $body='[enc]'; }
+            // Prepare file blob if present (decrypt and base64 encode for client)
+            $file_blob = null;
+            $file_mime = null;
+            if ($m->file_blob && $m->file_mime) {
+                try {
+                    $encService = app(\App\Services\EncryptionService::class);
+                    $file_blob = base64_encode($encService->decrypt($m->file_blob, 'chat_file'));
+                    $file_mime = $m->file_mime;
+                } catch (\Throwable $e) { $file_blob = null; $file_mime = null; }
+            }
             if ($m->receiver_id === $auth->id && !$m->read_at) { // mark read lazily
                 $m->read_at = now();
                 $m->save();
@@ -255,13 +267,15 @@ class MessageController extends Controller
                 ];
                 $lastDate = $day;
             }
-            $payload[] = [
+                $payload[] = [
                 'type' => 'message',
                 'id' => $m->id,
                 'body' => $body,
                 'is_me' => $m->sender_id === $auth->id,
                 'time' => $m->created_at->format('H:i'),
                 'read_at' => $m->read_at ? $m->read_at->timestamp : null,
+                'file_blob' => $file_blob,
+                'file_mime' => $file_mime,
             ];
         }
         return response()->json(['messages'=>$payload]);
@@ -307,12 +321,22 @@ class MessageController extends Controller
     }
         $messages = $conv->messages()->orderByDesc('id')->limit(60)->get()->sortBy('id')->values()->map(function($m) use ($auth){
             $plain = null; try { $plain = $this->encryptionService->decrypt($m->body,'message_body'); } catch(\Throwable $e){ $plain='[enc]'; }
+            $file_blob = null; $file_mime = null;
+            if ($m->file_blob && $m->file_mime) {
+                try {
+                    $encService = app(\App\Services\EncryptionService::class);
+                    $file_blob = base64_encode($encService->decrypt($m->file_blob, 'chat_file'));
+                    $file_mime = $m->file_mime;
+                } catch (\Throwable $e) { $file_blob = null; $file_mime = null; }
+            }
             return [
                 'id'=>$m->id,
                 'body'=>$plain,
                 'is_me'=>$m->sender_id===$auth->id,
         'time'=>$m->created_at->format('H:i'),
         'read_at'=>$m->read_at ? $m->read_at->timestamp : null,
+        'file_blob'=>$file_blob,
+        'file_mime'=>$file_mime,
             ];
         });
         return response()->json(['conversation_id'=>$conv->id,'messages'=>$messages]);
@@ -326,10 +350,10 @@ class MessageController extends Controller
             'conversation_id'=>'nullable|integer|exists:conversations,id',
             'user_id'=>'nullable|integer|exists:users,id',
             'body'=>'nullable|string|max:4000',
-            'image' => 'nullable|file|image|max:5120', // 5MB max
+            'file'=>'nullable|file|max:10240', // 10MB max
         ]);
-        if (empty($data['body']) && !$request->hasFile('image')) {
-            return response()->json(['error'=>'Message text or image required'], 422);
+        if (empty($data['body']) && !$request->hasFile('file')) {
+            return response()->json(['error'=>'Message text or file required'], 422);
         }
         if(empty($data['conversation_id']) && empty($data['user_id'])) {
             return response()->json(['error'=>'target_missing'],422);
@@ -343,8 +367,30 @@ class MessageController extends Controller
         } else {
             $conv = $this->conversationService->findOrCreateDirect($auth->id,(int)$data['user_id']);
         }
-        $plain = isset($data['body']) ? trim($data['body']) : '';
-        $cipher = $plain !== '' ? $this->encryptionService->encrypt($plain, 'message_body') : null;
+        $plain = null;
+        $file_blob = null;
+        $file_mime = null;
+        $resp_file_blob = null; // base64 for immediate response
+        if ($request->hasFile('file') && $request->file('file')->isValid()) {
+            $file = $request->file('file');
+            $originalName = $file->getClientOriginalName();
+            $mime = $file->getMimeType();
+            $binary = file_get_contents($file->getRealPath());
+            $encService = app(\App\Services\EncryptionService::class);
+            $encrypted = $encService->encrypt($binary, 'chat_file');
+            // Store file info in DB
+            $plain = '[file] ' . $originalName . "\n" . $originalName;
+            $file_blob = $encrypted;
+            $file_mime = $mime;
+            // Keep an immediate base64 copy for the response so client can display without extra request
+            $resp_file_blob = base64_encode($binary);
+        } else {
+            $plain = trim($data['body'] ?? '');
+        }
+        if ($plain === '') {
+            return response()->json(['error'=>'empty'],422);
+        }
+        $cipher = $this->encryptionService->encrypt($plain, 'message_body');
         $msg = new Message();
         $msg->conversation_id = $conv->id;
         $msg->sender_id = $auth->id;
@@ -358,14 +404,9 @@ class MessageController extends Controller
             $receiverId = $auth->id; 
         }
         $msg->receiver_id = $receiverId;
-        if ($cipher !== null) {
-            $msg->body = $cipher;
-        }
-        // Handle image upload
-        if ($request->hasFile('image')) {
-            $imgContent = base64_encode(file_get_contents($request->file('image')->getRealPath()));
-            $msg->setEncryptedImage($imgContent);
-        }
+        $msg->body = $cipher;
+        $msg->file_blob = $file_blob;
+        $msg->file_mime = $file_mime;
         $msg->save();
         $msg->updateDataMAC();
         $msg->save();
@@ -375,7 +416,9 @@ class MessageController extends Controller
             'image'=>$msg->decrypted_image_base64 ?? null,
             'is_me'=>true,
             'time'=>$msg->created_at->format('H:i'),
-            'read_at'=>null
+            'read_at'=>null,
+            'file_blob' => $resp_file_blob ?: ($file_blob ? true : false),
+            'file_mime' => $file_mime,
         ],'conversation_id'=>$conv->id]);
     }
 
@@ -395,12 +438,23 @@ class MessageController extends Controller
         }
         $rows = $query->limit(120)->get()->map(function($m) use ($auth){
             $plain=null; try { $plain=$this->encryptionService->decrypt($m->body,'message_body'); } catch(\Throwable $e){ $plain='[enc]'; }
+            $file_blob = null;
+            $file_mime = null;
+            if ($m->file_blob && $m->file_mime) {
+                try {
+                    $encService = app(\App\Services\EncryptionService::class);
+                    $file_blob = base64_encode($encService->decrypt($m->file_blob, 'chat_file'));
+                    $file_mime = $m->file_mime;
+                } catch (\Throwable $e) { $file_blob = null; $file_mime = null; }
+            }
             return [
                 'id'=>$m->id,
                 'body'=>$plain,
                 'is_me'=>$m->sender_id===$auth->id,
                 'time'=>$m->created_at->format('H:i'),
                 'read_at'=>$m->read_at ? $m->read_at->timestamp : null,
+                'file_blob'=>$file_blob,
+                'file_mime'=>$file_mime,
             ];
         });
         return response()->json(['messages'=>$rows]);

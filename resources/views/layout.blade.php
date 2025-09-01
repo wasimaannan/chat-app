@@ -71,6 +71,9 @@
             --cc-accent-alt: #fbc2eb;
             --cc-accent-grad: linear-gradient(90deg,#7f53ac,#fbc2eb);
             --cc-text: #232946;
+            /* Soft theme colors in RGB for alpha gradients */
+            --cc-softA-rgb: 251,194,235; /* #fbc2eb */
+            --cc-softB-rgb: 224,231,255; /* #e0e7ff */
         }
         html, body { height: 100%; }
         body { background:var(--cc-bg); color:var(--cc-text); font-family:'Nunito',sans-serif; min-height:100vh; min-height:100dvh; display:flex; flex-direction:column; }

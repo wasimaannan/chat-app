@@ -60,7 +60,18 @@
         <div class="profile-name-lg">{{ $decryptedData['name'] ?? 'Unknown User' }}</div>
         <div class="profile-handle">@user{{ $user->id }}</div>
         <div class="profile-joined">Joined {{ $user->created_at->format('F Y') }}</div>
-        <div class="profile-bio mt-3 mb-4">{{ $decryptedData['bio'] ?? 'No bio set. Tell us about yourself!' }}</div>
+        @php
+            $bio = $user->bio ?? '';
+            if ($bio) {
+                try {
+                    $enc = app(\App\Services\EncryptionService::class);
+                    $bio = $enc->decrypt($bio, 'user_bio');
+                } catch (Exception $e) {
+                    $bio = '[ENCRYPTED]';
+                }
+            }
+        @endphp
+        <div class="profile-bio mt-3 mb-4">{{ $bio ?: 'No bio set. Tell us about yourself!' }}</div>
         <div class="profile-stats d-flex justify-content-center gap-4 mb-4">
             <div><span class="stat-num">0</span> <span class="stat-label">Posts</span></div>
             <div><span class="stat-num">0</span> <span class="stat-label">Friends</span></div>
@@ -108,14 +119,50 @@
                     </div>
                     <div class="col-12">
                         <label class="form-label small text-uppercase">Bio</label>
-                        <textarea name="bio" rows="2" class="form-control profile-input">{{ old('bio', $decryptedData['bio'] ?? ($decryptedData['bio'] ?? '')) }}</textarea>
+                        <textarea name="bio" rows="2" class="form-control profile-input">{{ old('bio', $bio) }}</textarea>
                     </div>
                 </div>
                         <div class="d-flex justify-content-end mt-4 gap-2">
-                            <button type="reset" class="btn btn-outline-accent">Reset</button>
                             <button type="submit" class="btn btn-gradient"><i class="fas fa-save me-1"></i>Save Changes</button>
                         </div>
                     </form>
+                </div>
+            </div>
+            <!-- Password Change Form -->
+            <div class="profile-card glassy-card border-0 shadow-lg mt-4" style="max-width: 520px; width: 100%;">
+                <div class="card-body p-4">
+                    @if(Route::has('password.change'))
+                    <form method="POST" action="{{ route('password.change') }}" autocomplete="off" id="passwordChangeForm">
+                        @csrf
+                        <h5 class="mb-3">Change Password</h5>
+                        @if(session('password_success'))
+                            <div class="alert alert-success">{{ session('password_success') }}</div>
+                        @endif
+                        @if($errors->has('password_error'))
+                            <div class="alert alert-danger">{{ $errors->first('password_error') }}</div>
+                        @endif
+                        <div class="mb-3">
+                            <label class="form-label">Current Password</label>
+                            <input type="password" name="current_password" class="form-control @error('current_password') is-invalid @enderror" required>
+                            @error('current_password')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">New Password</label>
+                            <input type="password" name="new_password" class="form-control @error('new_password') is-invalid @enderror" required>
+                            @error('new_password')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Confirm New Password</label>
+                            <input type="password" name="new_password_confirmation" class="form-control @error('new_password_confirmation') is-invalid @enderror" required>
+                            @error('new_password_confirmation')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        </div>
+                        <div class="d-flex justify-content-end mt-3">
+                            <button type="submit" class="btn btn-accent rounded-pill shadow-sm px-4 py-2" style="background: #a78bfa; color: #fff; border: none;"><i class="fas fa-key me-1"></i>Change Password</button>
+                        </div>
+                    </form>
+                    @else
+                    <div class="alert alert-warning">Password change route is not available. Please contact support or try again later.</div>
+                    @endif
                 </div>
             </div>
         </div>
