@@ -18,10 +18,8 @@ class AuthController extends Controller
 {
     private $passwordService;
     private $encryptionService;
-    // ...existing code...
-    /**
-     * Change user password (separate from profile update)
-     */
+    
+    // change password
     public function changePassword(Request $request)
     {
         $user = $this->getCurrentUser();
@@ -57,7 +55,7 @@ class AuthController extends Controller
 
         return back()->with('password_success', 'Password changed successfully!');
     }
-    // ...existing code...
+
     private $credentialService;
     private $macService;
     
@@ -73,28 +71,24 @@ class AuthController extends Controller
         $this->macService = $macService;
     }
     
-    /**
-     * Show login form
-     */
+    // Show login form
+     
     public function showLogin()
     {
         return view('auth.login');
     }
-    
-    /**
-     * Show registration form
-     */
+
+    // Show registration form
+
     public function showRegister()
     {
         return view('auth.register');
     }
     
-    /**
-     * Handle user registration
-     */
+    // Handle user registration
+
     public function register(Request $request)
     {
-        // Ensure SQLite database file exists (common cause of silent registration failure)
         $this->ensureSqliteDatabase();
 
         \Log::info('REG: Starting registration', ['request' => $request->all()]);
@@ -202,10 +196,8 @@ class AuthController extends Controller
             return back()->withErrors(['error' => 'Registration failed. Please try again.'])->withInput();
         }
     }
-    
-    /**
-     * Handle user login
-     */
+
+    // user login
     public function login(Request $request)
     {
         // Validate input
@@ -243,9 +235,7 @@ class AuthController extends Controller
         }
     }
     
-    /**
-     * Handle user logout
-     */
+    // logout
     public function logout(Request $request)
     {
         session()->forget(['auth_token', 'user_id']);
@@ -263,32 +253,26 @@ class AuthController extends Controller
     return User::where('email_hash', $hash)->exists();
     }
     
-    /**
-     * Show user profile
-     */
+    // show profile
     public function profile()
     {
         $user = $this->getCurrentUser();
         if (!$user) {
             return redirect()->route('login');
         }
-        // Always reload the user from the database to get the latest fields
         $user = \App\Models\User::find($user->id);
         $decryptedData = $user->getDecryptedData();
         return view('auth.profile', compact('user', 'decryptedData'));
     }
-    
-    /**
-     * Update user profile
-     */
+
+    // update profile
     public function updateProfile(Request $request)
-    // moved debug log into try block to avoid syntax error
     {
         $user = $this->getCurrentUser();
         if (!$user) {
             return redirect()->route('login');
         }
-    // Reload user from DB to avoid working on a possibly stale instance
+    
     $user = \App\Models\User::find($user->id);
         
         // Validate input
@@ -314,7 +298,7 @@ class AuthController extends Controller
                 'request_data' => $request->all(),
             ]);
 
-            // Update user data with encryption
+            // Update user data 
             $userData = [
                 'name' => $request->name,
                 'email' => $user->getDecryptedData()['email'] ?? null, // Keep existing email
@@ -324,7 +308,7 @@ class AuthController extends Controller
                 'bio' => $request->bio,
             ];
 
-            // Handle profile picture upload and encryption FIRST
+            // Handle profile picture upload 
             $newProfilePicEncrypted = null;
             $newProfilePicMime = null;
             if ($request->hasFile('profile_picture')) {
@@ -357,10 +341,9 @@ class AuthController extends Controller
                 ]);
             }
 
-            // Use DB transaction to ensure atomic update
+            // DB transaction to ensure atomic update
             DB::beginTransaction();
             try {
-                // Apply encrypted data and save
                 $user->setEncryptedData($userData, $newProfilePicEncrypted, $newProfilePicMime);
                 $saved = $user->save();
 
@@ -390,9 +373,7 @@ class AuthController extends Controller
         }
     }
     
-    /**
-     * Get current authenticated user
-     */
+    // get current user from session
     private function getCurrentUser(): ?User
     {
         $token = session('auth_token');
@@ -403,10 +384,7 @@ class AuthController extends Controller
         return $this->credentialService->validateSessionToken($token);
     }
 
-    /**
-     * Ensure sqlite database file exists when using sqlite.
-     * Resolves relative path against base_path and auto-creates missing file.
-     */
+    
     private function ensureSqliteDatabase(): void
     {
         try {

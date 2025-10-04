@@ -17,10 +17,8 @@ class EncryptionService
         $this->keyManagement = $keyManagement;
     }
 
-    // -------- Legacy symmetric encryption (Defuse crypto) --------
-    /**
-     * Encrypt sensitive data
-     */
+    //Encrypt 
+     
     public function encrypt(string $data, string $context = 'default'): string
     {
         try {
@@ -35,9 +33,8 @@ class EncryptionService
         }
     }
 
-    /**
-     * Decrypt sensitive data
-     */
+    // Decrypt 
+
     public function decrypt(string $encryptedData, string $context = 'default'): string
     {
         try {
@@ -55,9 +52,9 @@ class EncryptionService
             throw new \RuntimeException('Failed to decrypt data');
         }
     }
-
-    // -------- Hybrid per-user field encryption (RSA wrap + AES-256-GCM) --------
-    private const USER_FIELDS = ['name', 'email', 'phone', 'address', 'date_of_birth']; // bio intentionally not encrypted
+ 
+    // Hybrid per user field encryption (RSA wrap + AES-256-GCM) 
+    private const USER_FIELDS = ['name', 'email', 'phone', 'address', 'date_of_birth']; 
 
     public function encryptUserInfoHybrid(User $user, array $userInfo): array
     {
@@ -85,7 +82,6 @@ class EncryptionService
     {
         $priv = $this->keyManagement->getPrivateKey($user);
         if (!$priv || empty($user->wrapped_userinfo_key)) {
-            // Fallback to legacy decrypt if no hybrid key yet
             return $this->decryptUserInfoLegacy($encryptedUserInfo);
         }
         if (!openssl_private_decrypt(base64_decode($user->wrapped_userinfo_key), $symKey, $priv, OPENSSL_PKCS1_OAEP_PADDING)) {
@@ -95,7 +91,6 @@ class EncryptionService
         $out = [];
         foreach ($encryptedUserInfo as $field => $value) {
             if (in_array($field, self::USER_FIELDS) && !empty($value)) {
-                // Detect legacy vs hybrid format (legacy is base64 string w/ Defuse; hybrid has two colons)
                 if (substr_count($value, ':') === 2) {
                     $out[$field] = $this->decryptFieldGCM($value, $symKey, 'user_info_'.$field);
                 } else {
@@ -125,10 +120,8 @@ class EncryptionService
         return $plain === false ? '[ENCRYPTED]' : $plain;
     }
 
-    // -------- Legacy bulk user info encryption/decryption retained --------
-    /**
-     * Encrypt user information for storage
-     */
+    // user info encryption/decryption
+    //encrypt
     public function encryptUserInfo(array $userInfo): array
     {
         $encryptedInfo = [];
@@ -144,9 +137,7 @@ class EncryptionService
         return $encryptedInfo;
     }
 
-    /**
-     * Decrypt user information for viewing
-     */
+    //decrypt
     public function decryptUserInfo(array $encryptedUserInfo): array
     {
         return $this->decryptUserInfoLegacy($encryptedUserInfo);
@@ -165,10 +156,9 @@ class EncryptionService
         return $decryptedInfo;
     }
 
-    // -------- Post encryption (legacy) --------
-    /**
-     * Encrypt post content
-     */
+    // Post encryption 
+    //encrypt
+
     public function encryptPost(string $content, string $title = ''): array
     {
         return [
@@ -178,9 +168,8 @@ class EncryptionService
         ];
     }
 
-    /**
-     * Decrypt post content
-     */
+    //decrypt
+
     public function decryptPost(array $encryptedPost): array
     {
         return [
@@ -190,17 +179,15 @@ class EncryptionService
         ];
     }
 
-    /**
-     * Encrypt chat/message body
-     */
+    //encrypt
+
     public function encryptMessage(string $body): string
     {
         return $this->encrypt($body, 'message_body');
     }
 
-    /**
-     * Decrypt chat/message body
-     */
+    //decrypt
+    
     public function decryptMessage(string $encryptedBody): string
     {
         return $this->decrypt($encryptedBody, 'message_body');

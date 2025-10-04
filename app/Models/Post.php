@@ -59,7 +59,6 @@ class Post extends Model
         $enc = app(EncryptionService::class);
         
         try {
-            // If hybrid fields present (wrapped_key etc.), decrypt manually
             if ($this->wrapped_key && $this->iv && $this->tag) {
                 $priv = app(KeyManagementService::class)->getPrivateKey($this->user);
                 if ($priv && openssl_private_decrypt(base64_decode($this->wrapped_key), $symKey, $priv, OPENSSL_PKCS1_OAEP_PADDING)) {
@@ -74,9 +73,7 @@ class Post extends Model
         }
     }
 
-    /**
-     * Set encrypted post data
-     */
+    // Set encrypted post data
     public function setEncryptedData(string $title, string $content): void
     {
         // Use hybrid approach now
@@ -85,14 +82,14 @@ class Post extends Model
         $pub = $this->user ? $kms->getPublicKey($this->user) : null;
         if ($pub) {
             $symKey = random_bytes(32);
-            // Encrypt title and content, get packed values
+            // Encrypt title and content
             $titlePacked = $title !== '' ? $this->encryptField($title, $symKey, 'post_title') : '';
             $contentPacked = $this->encryptField($content, $symKey, 'post_content');
             $this->title = $titlePacked;
             $this->content = $contentPacked;
             openssl_public_encrypt($symKey, $wrapped, $pub, OPENSSL_PKCS1_OAEP_PADDING);
             $this->wrapped_key = base64_encode($wrapped);
-            // Extract IV and tag from title field (or content if you prefer)
+            // Extract IV and tag from title field 
             if ($titlePacked && substr_count($titlePacked, ':') === 2) {
                 [$ivB64, $tagB64, $ctB64] = explode(':', $titlePacked);
                 $this->iv = $ivB64;

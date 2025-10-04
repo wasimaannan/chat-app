@@ -21,13 +21,11 @@ class CredentialCheckService
         $this->macService = $macService;
     }
     
-    /**
-     * Validate user credentials
-     */
+    // Validate user credentials during login
+
     public function validateCredentials(string $email, string $password): array
     {
         try {
-            // Find user by email (email is encrypted in database)
             $user = $this->findUserByEmail($email);
             
             if (!$user) {
@@ -83,15 +81,13 @@ class CredentialCheckService
         }
     }
     
-    /**
-     * Find user by email (decrypt and compare)
-     */
+    // Find user for hash and decryption
+
     private function findUserByEmail(string $email): ?User
     {
         $hash = hash('sha256', strtolower(trim($email)));
         $user = User::where('email_hash', $hash)->first();
         if ($user) {
-            // (Optional) final confirmation by decrypting (defense-in-depth)
             try {
                 $decryptedEmail = $this->encryptionService->decrypt($user->email, 'user_info_email');
                 if (hash_equals(strtolower($decryptedEmail), strtolower($email))) {
@@ -103,15 +99,14 @@ class CredentialCheckService
         }
         return null;
     }
-    
-    /**
-     * Verify user data integrity
-     */
+
+    // user data integrity MAC
+
     private function verifyUserIntegrity(User $user): bool
     {
         if (empty($user->data_mac)) {
             Log::warning('User has no MAC for integrity check', ['user_id' => $user->id]);
-            return true; // Allow for backward compatibility
+            return true; 
         }
         
         $userData = [
@@ -125,9 +120,8 @@ class CredentialCheckService
         return $this->macService->verifyUserDataMAC($userData, $user->id, $user->data_mac);
     }
     
-    /**
-     * Check if credentials meet security requirements
-     */
+    // Validate credential strength during registration or password change
+
     public function validateCredentialStrength(string $email, string $password): array
     {
         $errors = [];
@@ -149,10 +143,8 @@ class CredentialCheckService
             'password_strength' => $passwordCheck['strength'] ?? 'unknown'
         ];
     }
-    
-    /**
-     * Generate secure session token
-     */
+
+    // Generate secure session token
     public function generateSessionToken(User $user): string
     {
         $tokenData = [
@@ -170,10 +162,8 @@ class CredentialCheckService
         
         return base64_encode($encryptedToken . '|' . $mac);
     }
-    
-    /**
-     * Validate session token
-     */
+
+    // Validate session token
     public function validateSessionToken(string $token): ?User
     {
         try {

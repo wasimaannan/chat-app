@@ -5,7 +5,7 @@ namespace App\Http\Middleware;
 use Closure;
 use Illuminate\Http\Request;
 use App\Services\CredentialCheckService;
-use Illuminate\Support\Facades\Auth; // ensure Auth::user() works in controllers
+use Illuminate\Support\Facades\Auth; 
 
 class SecureAuth
 {

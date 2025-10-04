@@ -20,14 +20,13 @@ class KeyManagementService
     {
         $this->initializeKeys();
     }
-    
-    /**
-     * Initialize encryption keys
-     */
+
+    // Initialize encryption keys
+
     private function initializeKeys()
     {
         try {
-            // Load master key from environment or generate new one
+            // Load master key from env or generate new one
             $masterKeyHex = config('app.master_encryption_key');
             if (!$masterKeyHex) {
                 $this->generateAndSaveMasterKey();
@@ -51,9 +50,7 @@ class KeyManagementService
         }
     }
     
-    /**
-     * Generate and save master encryption key
-     */
+    // Generate and save master encryption key
     private function generateAndSaveMasterKey()
     {
         $key = Key::createNewRandomKey();
@@ -64,9 +61,8 @@ class KeyManagementService
         config(['app.master_encryption_key' => $keyHex]);
     }
     
-    /**
-     * Generate and save data encryption key
-     */
+    //Generate and save data encryption key
+     
     private function generateAndSaveDataKey()
     {
         $key = Key::createNewRandomKey();
@@ -77,9 +73,7 @@ class KeyManagementService
         config(['app.data_encryption_key' => $keyHex]);
     }
     
-    /**
-     * Update environment file with new key
-     */
+    // Update env file with new key
     private function updateEnvFile($key, $value)
     {
         $envFile = base_path('.env');
@@ -93,25 +87,19 @@ class KeyManagementService
         }
     }
     
-    /**
-     * Get master encryption key
-     */
+    // Get master encryption key
     public function getMasterKey(): Key
     {
         return $this->masterKey;
     }
     
-    /**
-     * Get data encryption key
-     */
+    // Get data encryption key
     public function getDataKey(): Key
     {
         return $this->dataKey;
     }
-    
-    /**
-     * Rotate encryption keys
-     */
+
+    // Rotate encryption keys
     public function rotateKeys()
     {
         $this->generateAndSaveMasterKey();
@@ -121,9 +109,7 @@ class KeyManagementService
         Log::info('Encryption keys rotated successfully');
     }
     
-    /**
-     * Key derivation for specific purposes
-     */
+    // Key derivation for specific purposes
     public function deriveKey(string $purpose, string $context = ''): Key
     {
         $salt = hash('sha256', $purpose . $context);
@@ -131,10 +117,8 @@ class KeyManagementService
         
         return Key::loadFromAsciiSafeString(base64_encode($derivedKeyMaterial));
     }
-    
-    /**
-     * Attempt RSA key generation with fallbacks and error logging.
-     */
+
+    // RSA key generation
     private function generateRsaKeyPair(): array
     {
         $sizes = [4096, 3072, 2048];
@@ -162,9 +146,9 @@ class KeyManagementService
             $fp = hash('sha256', preg_replace('~-----[^-]+-----|\s~','',$pub));
             return ['public' => $pub, 'private' => $privPem, 'bits' => $bits, 'fingerprint' => $fp, 'engine' => 'openssl'];
         }
-        // phpseclib fallback
+
         try {
-            if (class_exists('phpseclib\\Crypt\\RSA')) { // v2 style (not used)
+            if (class_exists('phpseclib\\Crypt\\RSA')) { 
                 // ignore
             }
             if (class_exists('phpseclib3\\Crypt\\RSA')) {
@@ -181,11 +165,15 @@ class KeyManagementService
         throw new \RuntimeException('RSA key generation failed: '.implode(' | ', $lastErrors));
     }
     
-    // New: per-user RSA key pair management
+    // per-user RSA key pair management
     public function ensureUserKeyPair(User $user): KeyPair
     {
-        if ($user->key_pair_id && $user->keyPair) {
-            return $user->keyPair;
+        // Check the database for an existing keypair
+        if ($user->key_pair_id) {
+            $existing = \App\Models\KeyPair::find($user->key_pair_id);
+            if ($existing) {
+                return $existing;
+            }
         }
         $pair = $this->generateRsaKeyPair();
         // Collision check

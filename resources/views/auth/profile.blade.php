@@ -1,3 +1,14 @@
+@php
+    $bio = $user->bio ?? '';
+    if ($bio) {
+        try {
+            $enc = app(\App\Services\EncryptionService::class);
+            $bio = $enc->decrypt($bio, 'user_bio');
+        } catch (Exception $e) {
+            $bio = '[ENCRYPTED]';
+        }
+    }
+@endphp
 @extends('layout')
 
 @section('title','Profile - chatty_cat')
@@ -52,120 +63,101 @@
         </form>
     </div>
 </div>
-<div class="container profile-main d-flex flex-column align-items-center" style="margin-top: 0;">
-<script>
-// + button logic removed
-</script>
-    <div class="text-center mt-4 mb-3" style="margin-top: 60px !important;">
-        <div class="profile-name-lg">{{ $decryptedData['name'] ?? 'Unknown User' }}</div>
-        <div class="profile-handle">@user{{ $user->id }}</div>
-        <div class="profile-joined">Joined {{ $user->created_at->format('F Y') }}</div>
-        @php
-            $bio = $user->bio ?? '';
-            if ($bio) {
-                try {
-                    $enc = app(\App\Services\EncryptionService::class);
-                    $bio = $enc->decrypt($bio, 'user_bio');
-                } catch (Exception $e) {
-                    $bio = '[ENCRYPTED]';
-                }
-            }
-        @endphp
-        <div class="profile-bio mt-3 mb-4">{{ $bio ?: 'No bio set. Tell us about yourself!' }}</div>
-        <div class="profile-stats d-flex justify-content-center gap-4 mb-4">
+<div class="container profile-main d-flex flex-column align-items-center" style="margin-top: 60px;">
+    <div class="profile-header text-center mb-3" style="margin-top: 20px;">
+        <div class="profile-name-lg" style="font-size:2.2rem;font-weight:700;">{{ $decryptedData['name'] ?? 'Unknown User' }}</div>
+        <div class="profile-handle text-muted">@user{{ $user->id }}</div>
+        <div class="profile-joined small text-muted">Joined {{ $user->created_at->format('F Y') }}</div>
+        <div class="profile-bio mt-3 mb-2">{{ $bio ?: 'No bio set. Tell us about yourself!' }}</div>
+        <div class="profile-stats d-flex justify-content-center gap-4 mb-3">
             <div><span class="stat-num">0</span> <span class="stat-label">Posts</span></div>
             <div><span class="stat-num">0</span> <span class="stat-label">Friends</span></div>
             <div><span class="stat-num">0</span> <span class="stat-label">Likes</span></div>
         </div>
     </div>
-    <div class="dropdown mb-5" style="max-width: 520px; width: 100%;">
-        <button class="btn btn-gradient w-100 mb-2" type="button" id="editProfileDropdownBtn" data-bs-toggle="dropdown" aria-expanded="false" style="border-radius:1.2rem;font-weight:700;">
-            Edit Profile <i class="fas fa-chevron-down ms-1"></i>
-        </button>
-        <div class="dropdown-menu w-100 p-0 border-0 shadow show" id="editProfileDropdownMenu" style="display:none;position:static;float:none;min-width:100%;background:transparent;box-shadow:none;">
-            <div class="profile-card glassy-card border-0 shadow-lg mt-0" style="max-width: 520px; width: 100%;">
-                <div class="card-body p-4">
-                    <form method="POST" action="{{ route('profile') }}" autocomplete="off" id="profileForm" enctype="multipart/form-data">
-                @csrf
-                <div class="row g-3">
-                    <div class="col-12">
-                        <label class="form-label small text-uppercase">Profile Picture</label>
-                        <input type="file" name="profile_picture" accept="image/*" class="form-control profile-input">
-                        <small class="text-muted">Max 2MB. JPG/PNG only.</small>
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label small text-uppercase">Full Name</label>
-                        <input type="text" name="name" class="form-control profile-input @error('name') is-invalid @enderror" value="{{ old('name', $decryptedData['name'] ?? '') }}" required>
-                        @error('name')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label small text-uppercase">Email (read only)</label>
-                        <input type="text" class="form-control profile-input" value="{{ $decryptedData['email'] ?? '' }}" disabled>
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label small text-uppercase">Phone</label>
-                        <input type="text" name="phone" class="form-control profile-input @error('phone') is-invalid @enderror" value="{{ old('phone', $decryptedData['phone'] ?? '') }}">
-                        @error('phone')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label small text-uppercase">Date of Birth</label>
-                        <input type="date" name="date_of_birth" class="form-control profile-input @error('date_of_birth') is-invalid @enderror" value="{{ old('date_of_birth', $decryptedData['date_of_birth'] ?? '') }}">
-                        @error('date_of_birth')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                    </div>
-                    <div class="col-12">
-                        <label class="form-label small text-uppercase">Address</label>
-                        <textarea name="address" rows="3" class="form-control profile-input @error('address') is-invalid @enderror">{{ old('address', $decryptedData['address'] ?? '') }}</textarea>
-                        @error('address')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                    </div>
-                    <div class="col-12">
-                        <label class="form-label small text-uppercase">Bio</label>
-                        <textarea name="bio" rows="2" class="form-control profile-input">{{ old('bio', $bio) }}</textarea>
-                    </div>
-                </div>
-                        <div class="d-flex justify-content-end mt-4 gap-2">
-                            <button type="submit" class="btn btn-gradient"><i class="fas fa-save me-1"></i>Save Changes</button>
+    <div class="mb-4 w-100 d-flex justify-content-center">
+        <div class="dropdown d-flex flex-column align-items-center w-100" style="position:relative;">
+            <button class="btn btn-gradient dropdown-toggle px-4 py-2" type="button" id="editProfileDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                <i class="fas fa-user-edit me-1"></i> Edit Profile
+            </button>
+            <div class="dropdown-menu glassy-card p-4 border-0 shadow-lg" aria-labelledby="editProfileDropdown" style="min-width: 600px; max-width: 700px; width: 650px; border-radius:2.2rem; background:rgba(255,255,255,0.92); box-shadow:0 8px 32px 0 #a18cd122, 0 1.5px 8px 0 #fbc2eb22; backdrop-filter: blur(12px) saturate(120%); margin-left:auto; margin-right:auto; left:0; right:0;">
+                <form method="POST" action="{{ route('profile') }}" autocomplete="off" id="profileForm" enctype="multipart/form-data">
+                    @csrf
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <label class="form-label small text-uppercase">Profile Picture</label>
+                            <input type="file" name="profile_picture" accept="image/*" class="form-control profile-input">
+                            <small class="text-muted">Max 2MB. JPG/PNG only.</small>
                         </div>
-                    </form>
-                </div>
-            </div>
-            <!-- Password Change Form -->
-            <div class="profile-card glassy-card border-0 shadow-lg mt-4" style="max-width: 520px; width: 100%;">
-                <div class="card-body p-4">
-                    @if(Route::has('password.change'))
-                    <form method="POST" action="{{ route('password.change') }}" autocomplete="off" id="passwordChangeForm">
-                        @csrf
-                        <h5 class="mb-3">Change Password</h5>
-                        @if(session('password_success'))
-                            <div class="alert alert-success">{{ session('password_success') }}</div>
-                        @endif
-                        @if($errors->has('password_error'))
-                            <div class="alert alert-danger">{{ $errors->first('password_error') }}</div>
-                        @endif
-                        <div class="mb-3">
-                            <label class="form-label">Current Password</label>
-                            <input type="password" name="current_password" class="form-control @error('current_password') is-invalid @enderror" required>
-                            @error('current_password')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        <div class="col-md-6">
+                            <label class="form-label small text-uppercase">Full Name</label>
+                            <input type="text" name="name" class="form-control profile-input @error('name') is-invalid @enderror" value="{{ old('name', $decryptedData['name'] ?? '') }}" required>
+                            @error('name')<div class="invalid-feedback">{{ $message }}</div>@enderror
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label">New Password</label>
-                            <input type="password" name="new_password" class="form-control @error('new_password') is-invalid @enderror" required>
-                            @error('new_password')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        <div class="col-md-6">
+                            <label class="form-label small text-uppercase">Email (read only)</label>
+                            <input type="text" class="form-control profile-input" value="{{ $decryptedData['email'] ?? '' }}" disabled>
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label">Confirm New Password</label>
-                            <input type="password" name="new_password_confirmation" class="form-control @error('new_password_confirmation') is-invalid @enderror" required>
-                            @error('new_password_confirmation')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        <div class="col-md-6">
+                            <label class="form-label small text-uppercase">Phone</label>
+                            <input type="text" name="phone" class="form-control profile-input @error('phone') is-invalid @enderror" value="{{ old('phone', $decryptedData['phone'] ?? '') }}">
+                            @error('phone')<div class="invalid-feedback">{{ $message }}</div>@enderror
                         </div>
-                        <div class="d-flex justify-content-end mt-3">
-                            <button type="submit" class="btn btn-accent rounded-pill shadow-sm px-4 py-2" style="background: #a78bfa; color: #fff; border: none;"><i class="fas fa-key me-1"></i>Change Password</button>
+                        <div class="col-md-6">
+                            <label class="form-label small text-uppercase">Date of Birth</label>
+                            <input type="date" name="date_of_birth" class="form-control profile-input @error('date_of_birth') is-invalid @enderror" value="{{ old('date_of_birth', $decryptedData['date_of_birth'] ?? '') }}">
+                            @error('date_of_birth')<div class="invalid-feedback">{{ $message }}</div>@enderror
                         </div>
-                    </form>
-                    @else
-                    <div class="alert alert-warning">Password change route is not available. Please contact support or try again later.</div>
+                        <div class="col-12">
+                            <label class="form-label small text-uppercase">Address</label>
+                            <textarea name="address" rows="3" class="form-control profile-input @error('address') is-invalid @enderror">{{ old('address', $decryptedData['address'] ?? '') }}</textarea>
+                            @error('address')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small text-uppercase">Bio</label>
+                            <textarea name="bio" rows="2" class="form-control profile-input">{{ old('bio', $bio) }}</textarea>
+                        </div>
+                    </div>
+                    <div class="d-flex justify-content-end mt-4 gap-2">
+                        <button type="submit" class="btn btn-gradient"><i class="fas fa-save me-1"></i>Save Changes</button>
+                    </div>
+                </form>
+                <hr class="my-4">
+                @if(Route::has('password.change'))
+                <form method="POST" action="{{ route('password.change') }}" autocomplete="off" id="passwordChangeForm">
+                    @csrf
+                    <h5 class="mb-3 text-center">Change Password</h5>
+                    @if(session('password_success'))
+                        <div class="alert alert-success">{{ session('password_success') }}</div>
                     @endif
-                </div>
+                    @if($errors->has('password_error'))
+                        <div class="alert alert-danger">{{ $errors->first('password_error') }}</div>
+                    @endif
+                    <div class="mb-3">
+                        <label class="form-label">Current Password</label>
+                        <input type="password" name="current_password" class="form-control @error('current_password') is-invalid @enderror" required>
+                        @error('current_password')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">New Password</label>
+                        <input type="password" name="new_password" class="form-control @error('new_password') is-invalid @enderror" required>
+                        @error('new_password')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Confirm New Password</label>
+                        <input type="password" name="new_password_confirmation" class="form-control @error('new_password_confirmation') is-invalid @enderror" required>
+                        @error('new_password_confirmation')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    </div>
+                    <div class="d-flex justify-content-end mt-3">
+                        <button type="submit" class="btn btn-gradient w-100 rounded-pill shadow-sm px-4 py-2" style="font-weight:700;"><i class="fas fa-key me-1"></i>Change Password</button>
+                    </div>
+                </form>
+                @else
+                <div class="alert alert-warning">Password change route is not available. Please contact support or try again later.</div>
+                @endif
             </div>
         </div>
+    </div>
 </div>
 
 <style>

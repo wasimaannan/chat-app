@@ -24,9 +24,7 @@ class MessageController extends Controller
         $this->encryptionService = $encryptionService;
         $this->macService = $macService;
     }
-    /**
-     * Lightweight helper to record a signaling event (offer/answer/candidate/typing/seen).
-     */
+    
     private function emitSignal(int $conversationId, int $fromUserId, string $type, array $payload = []): void
     {
         try {
@@ -40,16 +38,13 @@ class MessageController extends Controller
             ]);
         } catch (\Throwable $e) { /* ignore */ }
     }
-    /**
-     * Resolve the currently authenticated user using multiple fallbacks.
-     */
+    // Get current authenticated user
     private function currentUser(Request $request)
     {
         $auth = \Illuminate\Support\Facades\Auth::user();
         if ($auth) return $auth;
         $attr = $request->attributes->get('authenticated_user');
         if ($attr) return $attr;
-        // Try session token validation (custom auth scheme)
         if (session()->has('auth_token')) {
             try {
                 $svc = app(\App\Services\CredentialCheckService::class);
@@ -57,13 +52,12 @@ class MessageController extends Controller
                 if ($validated) return $validated;
             } catch (\Throwable $e) { /* ignore */ }
         }
-        // Direct user_id lookup fallback
         if (session()->has('user_id')) {
             return User::find(session('user_id'));
         }
         return null;
     }
-    // Inbox (messages received)
+    // Inbox 
     public function index()
     {
         $user = Auth::user();
@@ -85,7 +79,7 @@ class MessageController extends Controller
         return view('messages.sent', compact('messages'));
     }
 
-    // Conversation with a user
+    // Conversation
     public function conversation($userId, Request $request)
     {
         $auth = $this->currentUser($request);
@@ -144,20 +138,18 @@ class MessageController extends Controller
         }
     }
 
-    // New chat UI root view
     public function chat()
     {
         return view('chat.index');
     }
 
-    // List users with last message snippet + unread count (JSON)
+    // List users 
     public function users(Request $request)
     {
         $auth = $this->currentUser($request);
         $selfId = $auth?->id ?? 0;
         $q = trim($request->query('q', ''));
-    // Always exclude the sender (current user) from the chat list
-    $query = User::query()->where('id', '!=', $selfId)->limit(40);
+        $query = User::query()->where('id', '!=', $selfId)->limit(40);
         if ($q !== '') {
             $query->orderBy('id');
         }
@@ -167,13 +159,14 @@ class MessageController extends Controller
         foreach ($users as $u) {
             $name = null; $email = null;
             try {
-                // Prefer hybrid decrypt (falls back internally if legacy)
+                // Decrypt user information
                 $decrypted = $encSvc->decryptUserInfoHybrid($u, ['name'=>$u->name,'email'=>$u->email]);
                 $name = $decrypted['name'] ?? null;
                 if ($q !== '') { $email = $decrypted['email'] ?? null; }
                 \Log::debug('User decryption', ['user_id'=>$u->id, 'decrypted_name'=>$name, 'decrypted_email'=>$email]);
             } catch (\Throwable $e) {
-                // Legacy fallback (older records / partial data)
+
+
                 try { $name = $encSvc->decrypt($u->name, 'user_info_name'); } catch (\Throwable $e2) { $name = null; }
                 if ($q !== '') { try { $email = $encSvc->decrypt($u->email, 'user_info_email'); } catch (\Throwable $e3) { $email = null; } }
                 \Log::error('User decryption failed', ['user_id'=>$u->id, 'error'=>$e->getMessage()]);
@@ -192,17 +185,14 @@ class MessageController extends Controller
             }
             if ($lastMsg) {
                 try {
-                    // Try hybrid-style (iv:tag:cipher) detection first
                     $bodyCipher = $lastMsg->body;
                     if (substr_count($bodyCipher, ':') === 2) {
-                        // Use Message model helper for consistency
-                        $snippet = $lastMsg->decrypted_body ?? null; // accessor if defined; else fallback below
+                        $snippet = $lastMsg->decrypted_body ?? null;
                         if (!$snippet) { throw new \RuntimeException('Accessor missing'); }
                     } else {
                         $snippet = $encSvc->decrypt($bodyCipher, 'message_body');
                     }
                 } catch (\Throwable $e) {
-                    // Fallback to legacy decrypt or mark encrypted
                     try { $snippet = $encSvc->decrypt($lastMsg->body, 'message_body'); } catch (\Throwable $e2) { $snippet='[enc]'; }
                 }
                 if (is_string($snippet) && strlen($snippet) > 40) { $snippet = substr($snippet,0,40).'…'; }
@@ -219,7 +209,7 @@ class MessageController extends Controller
         return response()->json(['users'=>$result,'meta'=>['self_id'=>$selfId,'total'=>User::count()]]);
     }
 
-    // Conversation messages (incremental if after=id provided)
+    // Conversation messages (JSON)
     public function conversationJson($userId, Request $request)
     {
         $auth = $this->currentUser($request);
@@ -243,9 +233,8 @@ class MessageController extends Controller
         $payload = [];
         $lastDate = null;
         foreach ($messages as $m) {
-            // 'body' stores the ciphertext for messages (no body_encrypted column)
+            // 'decrypt' the message body
             try { $body = $enc->decrypt($m->body, 'message_body'); } catch (\Exception $e) { $body='[enc]'; }
-            // Prepare file blob if present (decrypt and base64 encode for client)
             $file_blob = null;
             $file_mime = null;
             if ($m->file_blob && $m->file_mime) {
@@ -255,7 +244,7 @@ class MessageController extends Controller
                     $file_mime = $m->file_mime;
                 } catch (\Throwable $e) { $file_blob = null; $file_mime = null; }
             }
-            if ($m->receiver_id === $auth->id && !$m->read_at) { // mark read lazily
+            if ($m->receiver_id === $auth->id && !$m->read_at) { 
                 $m->read_at = now();
                 $m->save();
             }

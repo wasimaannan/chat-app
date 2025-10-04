@@ -15,9 +15,7 @@ class User extends Authenticatable
 {
     use HasApiTokens, HasFactory, Notifiable;
 
-    /**
-     * The attributes that are mass assignable.
-     */
+    
     protected $fillable = [
         'name',
         'email',
@@ -26,8 +24,8 @@ class User extends Authenticatable
         'address',
         'date_of_birth',
         'bio',
-    'profile_picture',
-    'profile_picture_mime',
+        'profile_picture',
+        'profile_picture_mime',
         'password_hash',
         'password_salt',
         'data_mac',
@@ -38,9 +36,8 @@ class User extends Authenticatable
     ];
 
 
-    /**
-     * Get decrypted profile picture as base64 for display
-     */
+    //decrypt profile picture
+
     public function getDecryptedProfilePictureBase64(): ?array
     {
         if (!$this->profile_picture) return null;
@@ -61,9 +58,10 @@ class User extends Authenticatable
         }
     }
 
-    /**
-     * The attributes that should be hidden for serialization.
-     */
+    //protected $hidden = [
+    //    'profile_picture',
+    //    'profile_picture_mime',
+    //];
     protected $hidden = [
         'password_hash',
         'password_salt',
@@ -72,17 +70,15 @@ class User extends Authenticatable
         'wrapped_userinfo_key'
     ];
 
-    /**
-     * The attributes that should be cast.
-     */
+
     protected $casts = [
         'email_verified_at' => 'datetime',
         'is_active' => 'boolean',
     ];
 
-    /**
-     * The "booted" method of the model.
-     */
+
+    // call to generate user key pair
+
     protected static function boot()
     {
         parent::boot();
@@ -92,37 +88,56 @@ class User extends Authenticatable
         });
     }
 
-    /**
-     * Relationship with posts
-     */
+    // Relationships
+    
     public function posts()
     {
         return $this->hasMany(Post::class);
     }
 
-    /**
-     * Relationship with key pair
-     */
+    
     public function keyPair()
     {
         return $this->belongsTo(KeyPair::class);
     }
 
-    /**
-     * Get decrypted user data
-     */
+    // decryption of profile
+    // public function getDecryptedData(): array
+    // {
+    //     $encryptionService = app(EncryptionService::class);
+    //     $fields = [
+    //         'name' => $this->name,
+    //         'email' => $this->email,
+    //         'phone' => $this->phone,
+    //         'address' => $this->address,
+    //         'date_of_birth' => $this->date_of_birth,
+    //         'bio' => $this->bio,
+    //     ];
+    //     try {
+    //         $decrypted = $encryptionService->decryptUserInfoHybrid($this, $fields);
+    //     } catch (\Exception $e) {
+    //         \Log::error('Decryption failed for user fields', ['user_id' => $this->id, 'exception' => $e->getMessage(), 'fields' => $fields]);
+    //         // fallback: set all fields to null
+    //         $decrypted = [];
+    //         foreach (array_keys($fields) as $key) {
+    //             $decrypted[$key] = null;
+    //         }
+    //     }
+    //     return $decrypted;
+    // }
     public function getDecryptedData(): array
     {
         $encryptionService = app(EncryptionService::class);
+        $attrs = $this->getAttributes();
         $decrypted = $encryptionService->decryptUserInfoHybrid($this, [
-            'name' => $this->name,
-            'email' => $this->email,
-            'phone' => $this->phone,
-            'address' => $this->address,
-            'date_of_birth' => $this->date_of_birth,
+            'name' => $attrs['name'] ?? null,
+            'email' => $attrs['email'] ?? null,
+            'phone' => $attrs['phone'] ?? null,
+            'address' => $attrs['address'] ?? null,
+            'date_of_birth' => $attrs['date_of_birth'] ?? null,
         ]);
         // Decrypt bio if present
-        $bio = $this->bio;
+        $bio = $attrs['bio'] ?? null;
         if ($bio) {
             try {
                 $bio = $encryptionService->decrypt($bio, 'user_bio');
@@ -133,32 +148,28 @@ class User extends Authenticatable
         $decrypted['bio'] = $bio;
         return $decrypted;
     }
+    //set encrypted data
 
-    /**
-     * Set encrypted user data
-     */
     public function setEncryptedData(array $userData, $profilePicEncrypted = null, $profilePicMime = null): void
     {
         $encryptionService = app(EncryptionService::class);
         $macService = app(MACService::class);
         $kms = app(KeyManagementService::class);
         if ($this->id) { $kms->ensureUserKeyPair($this); }
-        // Remove bio from encrypted fields
         $userDataForEncryption = $userData;
         unset($userDataForEncryption['bio']);
         $encryptedData = $encryptionService->encryptUserInfoHybrid($this, $userDataForEncryption);
         $this->fill($encryptedData);
-        // Set encrypted bio
         if (isset($userData['bio']) && $userData['bio'] !== '') {
             $this->bio = $encryptionService->encrypt($userData['bio'], 'user_bio');
         } else {
             $this->bio = '';
         }
-        // Set profile_picture after fill to avoid being overwritten
+        // Set profile_picture 
         if ($profilePicEncrypted !== null) {
             $this->profile_picture = $profilePicEncrypted;
         }
-        // store mime if provided
+        // store mime 
         if ($profilePicMime !== null) {
             $this->profile_picture_mime = $profilePicMime;
         }
@@ -166,9 +177,8 @@ class User extends Authenticatable
         $this->data_mac = $macService->generateUserDataMAC($encryptedData, $this->id ?? 0);
     }
 
-    /**
-     * Verify data integrity
-     */
+    // data integrity MAC
+
     public function verifyIntegrity(): bool
     {
         if (empty($this->data_mac)) { return true; }
@@ -177,9 +187,8 @@ class User extends Authenticatable
         return $macService->verifyUserDataMAC($userData, $this->id, $this->data_mac);
     }
 
-    /**
-     * Update MAC after data changes
-     */
+    // Update MAC
+
     public function updateDataMAC(): void
     {
         $macService = app(MACService::class);
@@ -187,16 +196,14 @@ class User extends Authenticatable
         $this->data_mac = $macService->generateUserDataMAC($userData, $this->id);
     }
 
-    /**
-     * Override save method to update MAC
-     */
+   
+
     public function save(array $options = [])
     {
         // If a legacy/alternate attribute was set by other code (profile_picture_encrypted)
         // and the database does not have that column, move it into the canonical
         // `profile_picture` attribute so Eloquent won't attempt to update a missing column.
         if (array_key_exists('profile_picture_encrypted', $this->attributes) && !Schema::hasColumn('users', 'profile_picture_encrypted')) {
-            // preserve the value by moving it to profile_picture
             $this->attributes['profile_picture'] = $this->attributes['profile_picture_encrypted'];
             unset($this->attributes['profile_picture_encrypted']);
         }
@@ -217,17 +224,13 @@ class User extends Authenticatable
         return $result;
     }
 
-    /**
-     * Get user's full name (decrypted)
-     */
+    //fetch the decrypted data 
+
     public function getFullNameAttribute(): string
     {
         try { return $this->getDecryptedData()['name'] ?? '[ENCRYPTED]'; } catch (\Exception $e) { return '[ENCRYPTED]'; }
     }
 
-    /**
-     * Get user's email (decrypted)
-     */
     public function getEmailAddressAttribute(): string
     {
         try { return $this->getDecryptedData()['email'] ?? '[ENCRYPTED]'; } catch (\Exception $e) { return '[ENCRYPTED]'; }

@@ -4,9 +4,6 @@
 
 @section('content')
 <div class="container py-4">
-    @if(session('success'))
-        <div class="alert alert-success mb-3">{{ session('success') }}</div>
-    @endif
     <div class="row justify-content-center">
         <div class="col-md-8">
             <div class="card mb-4">
@@ -53,7 +50,11 @@
                     </div>
                 </div>
                 <div class="card-footer d-flex justify-content-between align-items-center">
-                    <!-- Edit button removed -->
+                    @if($decryptedPost['can_edit'])
+                        <a href="{{ route('posts.edit', $decryptedPost['id']) }}" class="btn btn-outline-purple btn-sm">
+                            <i class="fas fa-edit me-1"></i> Edit
+                        </a>
+                    @endif
                     <a href="{{ route('posts.index') }}" class="btn btn-outline-purple btn-sm">
                         <i class="fas fa-arrow-left me-1"></i> Back to Posts
                     </a>

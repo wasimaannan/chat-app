@@ -26,9 +26,7 @@ class PostController extends Controller
         $this->macService = $macService;
     }
     
-    /**
-     * Display a listing of posts
-     */
+    //all posts
     public function index()
     {
         $user = $this->getCurrentUser();
@@ -37,13 +35,12 @@ class PostController extends Controller
         }
         
         try {
-            // Get all posts (all are public now)
+            // Get all posts 
             $posts = Post::with(['user', 'comments'])->withCount('comments')->latest()->paginate(10);
             
-            // Decrypt posts for display
+            // Decrypt posts 
             $decryptedPosts = [];
             foreach ($posts as $post) {
-                // Verify data integrity first
                 if (!$post->verifyIntegrity()) {
                     \Log::warning('Post integrity check failed', ['post_id' => $post->id]);
                     continue;
@@ -70,10 +67,8 @@ class PostController extends Controller
             return view('posts.index', ['decryptedPosts' => []]);
         }
     }
-    
-    /**
-     * Show the form for creating a new post
-     */
+
+    // Creating a new post
     public function create()
     {
         $user = $this->getCurrentUser();
@@ -83,10 +78,8 @@ class PostController extends Controller
         
         return view('posts.create');
     }
-    
-    /**
-     * Store a newly created post
-     */
+
+    // Storing a new post
     public function store(Request $request)
     {
         $user = $this->getCurrentUser();
@@ -94,7 +87,6 @@ class PostController extends Controller
             return redirect()->route('login');
         }
         
-        // Validate input
         $validator = Validator::make($request->all(), [
             'title' => 'required|string|max:255',
             'content' => 'required|string',
@@ -121,10 +113,8 @@ class PostController extends Controller
             return back()->withErrors(['error' => 'Failed to create post. Please try again.'])->withInput();
         }
     }
-    
-    /**
-     * Display the specified post
-     */
+
+    // Display the specified post
     public function show($id)
     {
         $user = $this->getCurrentUser();
@@ -135,7 +125,6 @@ class PostController extends Controller
         try {
             $post = Post::with('user')->findOrFail($id);
             
-            // Verify data integrity
             if (!$post->verifyIntegrity()) {
                 \Log::warning('Post integrity check failed', ['post_id' => $post->id]);
                 return redirect()->route('posts.index')->withErrors(['error' => 'Post data integrity error']);
@@ -163,10 +152,8 @@ class PostController extends Controller
             return redirect()->route('posts.index')->withErrors(['error' => 'Post not found or access denied']);
         }
     }
-    
-    /**
-     * Show the form for editing the specified post
-     */
+
+    // Editing a post
     public function edit($id)
     {
         $user = $this->getCurrentUser();
@@ -202,10 +189,8 @@ class PostController extends Controller
             return redirect()->route('posts.index')->withErrors(['error' => 'Post not found']);
         }
     }
-    
-    /**
-     * Update the specified post
-     */
+
+    // Updating a post
     public function update(Request $request, $id)
     {
         $user = $this->getCurrentUser();
@@ -249,10 +234,8 @@ class PostController extends Controller
             return back()->withErrors(['error' => 'Failed to update post. Please try again.'])->withInput();
         }
     }
-    
-    /**
-     * Remove the specified post
-     */
+
+    // Deleting a post
     public function destroy($id)
     {
         $user = $this->getCurrentUser();
@@ -277,10 +260,7 @@ class PostController extends Controller
             return redirect()->route('posts.index')->withErrors(['error' => 'Failed to delete post']);
         }
     }
-    
-    /**
-     * Display user's own posts
-     */
+    // Display posts of the authenticated user
     public function myPosts()
     {
         $user = $this->getCurrentUser();
@@ -295,7 +275,6 @@ class PostController extends Controller
             // Decrypt posts for display
             $decryptedPosts = [];
             foreach ($posts as $post) {
-                // Verify data integrity first
                 if (!$post->verifyIntegrity()) {
                     \Log::warning('Post integrity check failed', ['post_id' => $post->id]);
                     continue;
@@ -319,10 +298,8 @@ class PostController extends Controller
             return view('posts.my-posts', ['decryptedPosts' => []]);
         }
     }
-    
-    /**
-     * Get current authenticated user
-     */
+
+    // Get current authenticated user
     private function getCurrentUser(): ?User
     {
         $token = session('auth_token');

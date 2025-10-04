@@ -16,9 +16,7 @@ class DashboardController extends Controller
         $this->credentialService = $credentialService;
     }
     
-    /**
-     * Display the dashboard
-     */
+    
     public function index()
     {
         $user = $this->getCurrentUser();
@@ -30,7 +28,7 @@ class DashboardController extends Controller
             // Get user's decrypted data
             $userData = $user->getDecryptedData();
             
-            // Get dashboard statistics
+            // Get dashboard stats
             $stats = [
                 'total_posts' => Post::byUser($user->id)->count(),
                 'published_posts' => Post::byUser($user->id)->published()->count(),
@@ -66,10 +64,8 @@ class DashboardController extends Controller
             ]);
         }
     }
-    
-    /**
-     * Get current authenticated user
-     */
+
+    // Get current authenticated user from session token
     private function getCurrentUser(): ?User
     {
         $token = session('auth_token');

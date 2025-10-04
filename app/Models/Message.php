@@ -15,7 +15,7 @@ class Message extends Model
     protected $fillable = [
         'conversation_id','sender_id','receiver_id','body','data_mac','read_at','wrapped_key','iv','tag','image'
     ];
-    // Encrypt and set the image (base64 string or binary)
+    // Encrypt the image 
     public function setEncryptedImage($imageContent): void
     {
         if (!$imageContent) return;
@@ -23,7 +23,7 @@ class Message extends Model
         $this->image = $enc->encrypt($imageContent, 'message_image');
     }
 
-    // Get decrypted image (base64 string)
+    // Decrypted image
     public function getDecryptedImageBase64Attribute(): ?string
     {
         if (!$this->image) return null;
